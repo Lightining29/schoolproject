@@ -1,0 +1,12 @@
+{
+  "name": "apna-school-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root package manager for Apna School Kindergarten website",
+  "scripts": {
+    "install-all": "npm install --prefix backend && npm install --prefix frontend --include=dev",
+    "build-frontend": "npm run build --prefix frontend",
+    "build": "npm run install-all && npm run build-frontend",
+    "start": "npm start --prefix backend"
+  }
+}

@@ -1,0 +1,285 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-quicksand font-bold tracking-tight;
+  }
+}
+
+/* Custom Kid-friendly Playful Details */
+.curvy-bg {
+  background-image: radial-gradient(circle at 100% 150%, #B3E5FC 24%, #4FC3F7 25%, #4FC3F7 28%, #FAF8F5 29%);
+}
+
+/* Playful custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF8F5;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #FF7043;
+  border-radius: 10px;
+  border: 2px solid #FAF8F5;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #E64A19;
+}
+
+/* Dark mode basic style overrides if needed */
+.dark-theme-parent {
+  background-color: #0F172A;
+  color: #F8FAFC;
+}
+
+/* Page transitions */
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Claymorphism styles */
+@layer utilities {
+  .clay-bg {
+    background-color: #F6F4FC;
+  }
+  .clay-card {
+    background-color: #FFFFFF;
+    border: 6px solid #FFFFFF;
+    border-radius: 2.5rem;
+    box-shadow: 
+      0 20px 40px -15px rgba(159, 146, 236, 0.12),
+      0 15px 25px -10px rgba(0, 0, 0, 0.04),
+      inset 4px 4px 8px rgba(255, 255, 255, 0.8),
+      inset -4px -4px 8px rgba(159, 146, 236, 0.1);
+  }
+  .clay-card-purple {
+    background-color: #ECEAFE;
+    border: 6px solid #ECEAFE;
+    border-radius: 2.5rem;
+    box-shadow: 
+      0 20px 40px -15px rgba(159, 146, 236, 0.18),
+      inset 4px 4px 8px rgba(255, 255, 255, 0.7),
+      inset -4px -4px 8px rgba(159, 146, 236, 0.15);
+  }
+  .clay-sidebar {
+    background-color: #9F92EC;
+    border: 6px solid #9F92EC;
+    border-radius: 2.5rem;
+    box-shadow: 
+      0 25px 50px -12px rgba(159, 146, 236, 0.25),
+      inset 6px 6px 12px rgba(255, 255, 255, 0.3),
+      inset -6px -6px 12px rgba(0, 0, 0, 0.08);
+  }
+  .clay-sidebar-item-active {
+    background-color: #FFFFFF;
+    color: #9F92EC !important;
+    border-radius: 1.5rem;
+    box-shadow: 
+      0 10px 20px -5px rgba(159, 146, 236, 0.18),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+      inset -2px -2px 4px rgba(159, 146, 236, 0.08);
+  }
+  .clay-button-purple {
+    background-color: #9F92EC;
+    color: #FFFFFF;
+    border-radius: 1.5rem;
+    box-shadow: 
+      0 12px 24px -8px rgba(159, 146, 236, 0.4),
+      inset 3px 3px 6px rgba(255, 255, 255, 0.3),
+      inset -3px -3px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+  }
+  .clay-button-purple:hover {
+    transform: translateY(-1px);
+    box-shadow: 
+      0 15px 30px -10px rgba(159, 146, 236, 0.5),
+      inset 3px 3px 6px rgba(255, 255, 255, 0.4),
+      inset -3px -3px 6px rgba(0, 0, 0, 0.08);
+  }
+  .clay-button-pink {
+    background-color: #FFC5DC;
+    color: #9F1239;
+    border-radius: 1.5rem;
+    box-shadow: 
+      0 12px 24px -8px rgba(244, 63, 94, 0.15),
+      inset 3px 3px 6px rgba(255, 255, 255, 0.4),
+      inset -3px -3px 6px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+  }
+  .clay-button-pink:hover {
+    transform: translateY(-1px);
+    box-shadow: 
+      0 15px 30px -10px rgba(244, 63, 94, 0.2);
+  }
+  .clay-badge-purple {
+    background-color: #ECEAFE;
+    color: #7C3AED;
+    border-radius: 0.75rem;
+    box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.8), inset -1px -1px 2px rgba(159, 146, 236, 0.1);
+  }
+  .clay-badge-pink {
+    background-color: #FFE4E6;
+    color: #E11D48;
+    border-radius: 0.75rem;
+    box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.8), inset -1px -1px 2px rgba(244, 63, 94, 0.1);
+  }
+  .clay-badge-yellow {
+    background-color: #FEF3C7;
+    color: #D97706;
+    border-radius: 0.75rem;
+    box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.8), inset -1px -1px 2px rgba(251, 191, 36, 0.1);
+  }
+  .clay-badge-blue {
+    background-color: #E0F2FE;
+    color: #0369A1;
+    border-radius: 0.75rem;
+    box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.8), inset -1px -1px 2px rgba(56, 189, 248, 0.1);
+  }
+  .clay-bar {
+    border-radius: 1rem;
+    box-shadow: 
+      inset 3px 0 6px rgba(255, 255, 255, 0.4),
+      inset -3px 0 6px rgba(0, 0, 0, 0.12);
+  }
+}
+
+/* Print Styles for genuine fee receipt & student ID card */
+@media print {
+  @page {
+    size: portrait;
+    margin: 10mm;
+  }
+  
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide the rest of the dashboard app content */
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Make the modal backdrop overlay transparent and flow-based */
+  .fixed.inset-0.z-50 {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    display: block !important;
+    padding: 0 !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+  }
+  
+  /* Remove wrapping modal layout styles during print */
+  #id-card-modal-container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 !important;
+  }
+
+  /* Style the receipt sheet container - display in flow */
+  #printable-receipt {
+    position: relative !important;
+    margin: 20px auto !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    width: 380px !important;
+    max-width: 380px !important;
+    background: #ffffff !important;
+    border: 3px double #5B468C !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    display: block !important;
+    padding: 24px !important;
+    border-radius: 24px !important;
+  }
+  
+  #printable-receipt::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    border: 1px solid #5B468C;
+    pointer-events: none;
+    border-radius: 20px;
+  }
+
+  /* Style the vertical ID card container - display in flow */
+  #printable-id-card {
+    position: relative !important;
+    margin: 40px auto !important;
+    left: auto !important;
+    top: auto !important;
+    transform: scale(1.1) !important;
+    width: 260px !important;
+    height: 400px !important;
+    background: #ffffff !important;
+    border: 6px solid #5B468C !important;
+    border-radius: 2rem !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+
+  /* Style the progress report card container */
+  #result-card-modal-container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 !important;
+  }
+
+  #printable-result-card {
+    position: relative !important;
+    margin: 0 auto !important;
+    background: #FAF9F5 !important;
+    border: 6px double #D4AF37 !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 670px !important;
+    padding: 24px !important;
+    border-radius: 16px !important;
+    page-break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
