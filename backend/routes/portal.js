@@ -10,6 +10,7 @@ import FineRule from '../models/FineRule.js';
 import { protect, authorize } from '../middleware/auth.js';
 import mockStore from '../config/mockStore.js';
 import { createPaymentOrder, verifyPaymentSignature, getPublicPaymentKey } from '../config/paymentService.js';
+import { generateTeacherRemarkAI } from '../config/aiVerificationService.js';
 
 const router = express.Router();
 
@@ -590,6 +591,120 @@ router.post('/teacher/student/:studentId/activity', protect, authorize('teacher'
     student.activities.unshift(activity);
     await student.save();
     res.json({ success: true, message: 'Activity logged successfully!', data: student });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Bulk log attendance for an entire class roster
+// @route   POST /api/portal/teacher/bulk-attendance
+// @access  Private (Teacher)
+router.post('/teacher/bulk-attendance', protect, authorize('teacher'), async (req, res) => {
+  const { date, records } = req.body; // records: [{ studentId, status }, ...]
+  const targetDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ success: false, message: 'No attendance records provided' });
+  }
+
+  try {
+    if (mockStore.isMock) {
+      for (const rec of records) {
+        const student = await mockStore.findById('students', rec.studentId);
+        if (student) {
+          const attendanceList = Array.isArray(student.attendance) ? [...student.attendance] : [];
+          const existingIdx = attendanceList.findIndex(att => att.date === targetDate);
+          if (existingIdx !== -1) {
+            attendanceList[existingIdx].status = rec.status;
+          } else {
+            attendanceList.push({ date: targetDate, status: rec.status });
+          }
+          await mockStore.findByIdAndUpdate('students', rec.studentId, { attendance: attendanceList });
+        }
+      }
+      return res.json({ success: true, message: `Class attendance saved for ${records.length} students!` });
+    }
+
+    // MySQL production execution
+    for (const rec of records) {
+      const student = await Student.findById(rec.studentId);
+      if (student) {
+        const attendanceList = Array.isArray(student.attendance) ? [...student.attendance] : [];
+        const existingIdx = attendanceList.findIndex(
+          (att) => (att.date instanceof Date ? att.date.toISOString().split('T')[0] : att.date) === targetDate
+        );
+        if (existingIdx !== -1) {
+          attendanceList[existingIdx].status = rec.status;
+        } else {
+          attendanceList.push({ date: new Date(targetDate), status: rec.status });
+        }
+        student.attendance = attendanceList;
+        await student.save();
+      }
+    }
+
+    res.json({ success: true, message: `Class attendance saved for ${records.length} students!` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Broadcast an activity to all students in a class
+// @route   POST /api/portal/teacher/class-activity
+// @access  Private (Teacher)
+router.post('/teacher/class-activity', protect, authorize('teacher'), async (req, res) => {
+  const { className, title, description, category } = req.body;
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateStr = new Date().toISOString().split('T')[0];
+
+  try {
+    const activityItem = {
+      date: dateStr,
+      time,
+      title,
+      description,
+      category: category || 'play'
+    };
+
+    if (mockStore.isMock) {
+      const allStudents = await mockStore.find('students');
+      const classStudents = allStudents.filter(s => s.class === className);
+      for (const std of classStudents) {
+        const activities = Array.isArray(std.activities) ? [...std.activities] : [];
+        activities.unshift(activityItem);
+        await mockStore.findByIdAndUpdate('students', std._id, { activities });
+      }
+      return res.json({ success: true, message: `Activity posted to ${classStudents.length} students in ${className}!` });
+    }
+
+    const classStudents = await Student.find({ class: className });
+    for (const std of classStudents) {
+      const activities = Array.isArray(std.activities) ? [...std.activities] : [];
+      activities.unshift(activityItem);
+      std.activities = activities;
+      await std.save();
+    }
+
+    res.json({ success: true, message: `Activity posted to ${classStudents.length} students in ${className}!` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Generate AI Smart Remarks for Student Result Card
+// @route   POST /api/portal/teacher/ai-generate-remarks
+// @access  Private (Teacher)
+router.post('/teacher/ai-generate-remarks', protect, authorize('teacher'), async (req, res) => {
+  try {
+    const { studentName, studentClass, scores, tone, traits } = req.body;
+    const result = generateTeacherRemarkAI({
+      studentName,
+      studentClass,
+      scores,
+      tone,
+      traits
+    });
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -138,3 +138,65 @@ export async function verifyAdmissionDocumentAI({
     engine: 'ApnaSchool Document Intelligence v2.0'
   };
 }
+
+// ==============================================================================
+// AI Smart Report Card & Teacher Remark Generator
+// ==============================================================================
+export function generateTeacherRemarkAI({
+  studentName = 'Student',
+  studentClass = 'Nursery',
+  scores = {},
+  tone = 'encouraging',
+  traits = []
+}) {
+  const cognitive = Number(scores.cognitive ?? 80);
+  const social = Number(scores.social ?? 80);
+  const creative = Number(scores.creative ?? 80);
+  const motorSkills = Number(scores.motorSkills ?? 80);
+
+  const avg = Number(((cognitive + social + creative + motorSkills) / 4).toFixed(1));
+  const traitText = traits.length > 0 ? traits.join(', ') : 'overall classroom participation';
+
+  const strengths = [];
+  let growthArea = '';
+
+  if (cognitive >= 85) strengths.push('sharp language & numeracy grasp');
+  else if (cognitive < 70) growthArea = 'daily foundational phonics & numbers practice';
+
+  if (creative >= 85) strengths.push('vivid imagination in arts and free expression');
+  
+  if (social >= 85) strengths.push('admirable peer empathy and team cooperation');
+  else if (social < 70 && !growthArea) growthArea = 'encouraging conversational sharing with classmates';
+
+  if (motorSkills >= 85) strengths.push('nimble fine & gross motor coordination in outdoor activities');
+  else if (motorSkills < 70 && !growthArea) growthArea = 'engaging in scissors, clay, and grip-building play';
+
+  const strengthSentence = strengths.length > 0 
+    ? `${studentName} exhibits ${strengths.join(' coupled with ')}.`
+    : `${studentName} shows steady developmental advancement across core kindergarten milestones.`;
+
+  const recommendation = growthArea 
+    ? `We suggest gentle home support for ${growthArea} to build further confidence.`
+    : `Continuing to nurture their joyous curiosity and positive spirit is recommended!`;
+
+  let remark = '';
+  if (tone === 'star' || avg >= 90) {
+    remark = `${studentName} has been a stellar presence in ${studentClass} this term (Aggregate: ${avg}%)! ${strengthSentence} Known for ${traitText}, they actively inspire their peers. ${recommendation}`;
+  } else if (tone === 'growth' || avg < 75) {
+    remark = `${studentName} is displaying earnest effort in ${studentClass} (${avg}%). With consistent encouragement in ${traitText}, their confidence is expanding nicely. ${strengthSentence} ${recommendation}`;
+  } else if (tone === 'creative') {
+    remark = `${studentName} brings marvelous artistic warmth and innovative thinking to ${studentClass} (${avg}%). ${strengthSentence} Their affinity for ${traitText} brightens our daily classroom circle. ${recommendation}`;
+  } else {
+    // Warm & Encouraging (Default)
+    remark = `${studentName} has had an uplifting and productive term in ${studentClass} (${avg}%). ${strengthSentence} Demonstrates consistent dedication to ${traitText}. ${recommendation}`;
+  }
+
+  return {
+    remark,
+    average: avg,
+    tone,
+    highlight: strengths[0] || 'Well-Balanced Learner',
+    recommendation
+  };
+}
+
