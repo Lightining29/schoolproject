@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
@@ -13,6 +12,7 @@ import Message from '../models/Message.js';
 import Query from '../models/Query.js';
 import Receipt from '../models/Receipt.js';
 import FeeStructure from '../models/FeeStructure.js';
+import FineRule from '../models/FineRule.js';
 import mockStore from './mockStore.js';
 
 export const seedDatabase = async () => {
@@ -89,6 +89,20 @@ export const seedDatabase = async () => {
       ];
       await FeeStructure.insertMany(defaultStructures);
       console.log('School fee structures successfully seeded.');
+    }
+
+    // Ensure FineRules are seeded
+    const fineRuleCount = await FineRule.countDocuments();
+    if (fineRuleCount === 0) {
+      console.log('Seeding official school fine rules into Hostinger MySQL...');
+      const defaultFineRules = [
+        { minDays: 1, maxDays: 7, fineAmount: 50 },
+        { minDays: 8, maxDays: 15, fineAmount: 100 },
+        { minDays: 16, maxDays: 30, fineAmount: 200 },
+        { minDays: 31, maxDays: 365, fineAmount: 500 }
+      ];
+      await FineRule.insertMany(defaultFineRules);
+      console.log('Fine rules successfully seeded.');
     }
 
     // Check if extra data (students/teachers/classes) already exists

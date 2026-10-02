@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import mongoose from 'mongoose';
+import { generateId } from '../config/modelHelper.js';
 import fs from 'fs';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
@@ -581,7 +581,7 @@ router.put('/admissions/:id', async (req, res) => {
       const firstTeacher = await Teacher.findOne();
 
       // 2. Create student
-      const studentDbId = new mongoose.Types.ObjectId();
+      const studentDbId = generateId();
       const generatedStudentId = `STD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const hasPhoto = admission.documentData?.photo?.data;
       const student = await Student.create({
@@ -692,10 +692,10 @@ router.post('/admissions/create', uploadAdmissions.fields([
     const isMock = mockStore.isMock;
     const admissionId = isMock
       ? 'adm_' + Math.random().toString(36).substr(2, 9)
-      : new mongoose.Types.ObjectId();
+      : generateId();
     const studentDbId = isMock
       ? 'std_' + Math.random().toString(36).substr(2, 9)
-      : new mongoose.Types.ObjectId();
+      : generateId();
 
     const getFileUrl = (file, fieldName) => {
       if (!file) return '';
@@ -1506,7 +1506,7 @@ router.post('/gallery', uploadGallery.single('file'), async (req, res) => {
       return res.status(201).json({ success: true, message: 'Media added to gallery!', data: gal });
     }
 
-    const galId = new mongoose.Types.ObjectId();
+    const galId = generateId();
     const gal = await Gallery.create({
       _id: galId,
       title,
@@ -1514,7 +1514,7 @@ router.post('/gallery', uploadGallery.single('file'), async (req, res) => {
       url: `/api/public/gallery/image/${galId}`,
       category: category || 'events',
       type: type || 'image',
-      imageData: { data: fileBuffer, contentType }
+      imageData: { data: fileBuffer ? fileBuffer.toString('base64') : '', contentType }
     });
     res.status(201).json({ success: true, message: 'Media added to gallery!', data: gal });
   } catch (error) {

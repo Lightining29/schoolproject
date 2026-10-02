@@ -1,5 +1,5 @@
 import express from 'express';
-import mongoose from 'mongoose';
+import { generateId } from '../config/modelHelper.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -161,12 +161,12 @@ router.post('/admissions/apply', uploadAdmissions.fields([
     const photoFile = req.files?.['photo']?.[0];
 
     const isMock = mockStore.isMock;
-    const admissionId = isMock ? 'adm_' + Math.random().toString(36).substr(2, 9) : new mongoose.Types.ObjectId();
+    const admissionId = isMock ? 'adm_' + Math.random().toString(36).substr(2, 9) : generateId();
 
     const makeDocData = (file) => {
       if (!file) return undefined;
       return {
-        data: isMock ? file.buffer.toString('base64') : file.buffer,
+        data: file.buffer ? file.buffer.toString('base64') : '',
         contentType: file.mimetype,
         filename: file.originalname
       };
