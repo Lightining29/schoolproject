@@ -10,7 +10,11 @@ import FineRule from '../models/FineRule.js';
 import { protect, authorize } from '../middleware/auth.js';
 import mockStore from '../config/mockStore.js';
 import { createPaymentOrder, verifyPaymentSignature, getPublicPaymentKey } from '../config/paymentService.js';
-import { generateTeacherRemarkAI } from '../config/aiVerificationService.js';
+import {
+  generateTeacherRemarkAI,
+  generateLessonPlanAI,
+  generateParentingCoachAI
+} from '../config/aiVerificationService.js';
 
 const router = express.Router();
 
@@ -431,6 +435,25 @@ router.get('/parent/receipt/:feeId', protect, authorize('parent'), async (req, r
   }
 });
 
+// @desc    AI Parenting & Child Growth Coach ("Apna AI Pal")
+// @route   POST /api/portal/parent/ai-parent-coach
+// @access  Private (Parent)
+router.post('/parent/ai-parent-coach', protect, authorize('parent'), async (req, res) => {
+  try {
+    const { question, childName, childAge, childClass } = req.body;
+    const response = generateParentingCoachAI({
+      question: question || '',
+      childName: childName || 'Your child',
+      childAge: childAge || '4 years',
+      childClass: childClass || 'Nursery'
+    });
+    res.json({ success: true, data: response });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
 
 // ==========================================
 // TEACHER PORTAL ENDPOINTS
@@ -709,6 +732,25 @@ router.post('/teacher/ai-generate-remarks', protect, authorize('teacher'), async
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// @desc    Generate AI Interactive Classroom Lesson Plan & Story
+// @route   POST /api/portal/teacher/ai-lesson-plan
+// @access  Private (Teacher)
+router.post('/teacher/ai-lesson-plan', protect, authorize('teacher'), async (req, res) => {
+  try {
+    const { topic, grade, duration, theme } = req.body;
+    const plan = generateLessonPlanAI({
+      topic,
+      grade,
+      duration,
+      theme
+    });
+    res.json({ success: true, data: plan });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 
 // ==========================================

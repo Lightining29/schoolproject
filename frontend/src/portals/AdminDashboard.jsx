@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, ClipboardList, Users, CreditCard, Bell, Image as ImageIcon, MessageCircle, CheckCircle, XCircle, Trash2, Plus, Clock, Search, FileText, Printer, Edit, Download, Contact, Calendar, ChevronLeft, ChevronRight, Sparkles, DollarSign, LogOut, ArrowRight, Target, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, CreditCard, Bell, Image as ImageIcon, MessageCircle, CheckCircle, XCircle, Trash2, Plus, Clock, Search, FileText, Printer, Edit, Download, Contact, Calendar, ChevronLeft, ChevronRight, Sparkles, DollarSign, LogOut, ArrowRight, Target, Zap, ShieldCheck, AlertTriangle, TrendingUp, Bot, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import StudentIdCardModal from '../components/StudentIdCardModal.jsx';
@@ -167,6 +167,74 @@ export default function AdminDashboard() {
   const [galItems, setGalItems] = useState([]);
 
   const [feeStructures, setFeeStructures] = useState([]);
+
+  // AI Predictive Financial Forecast state
+  const [aiForecast, setAiForecast] = useState(null);
+  const [aiForecastLoading, setAiForecastLoading] = useState(false);
+
+  const fetchAiForecast = async () => {
+    setAiForecastLoading(true);
+    try {
+      const res = await fetch('/api/admin/ai/financial-forecast', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setAiForecastLoading(false);
+      if (data.success && data.data) {
+        setAiForecast(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching AI financial forecast:', err);
+      setAiForecastLoading(false);
+    }
+  };
+
+  // AI Circular / Notice Composer state
+  const [aiNoticePrompt, setAiNoticePrompt] = useState({
+    title: '',
+    keyPoints: '',
+    tone: 'official',
+    audience: 'All Parents & Teachers'
+  });
+  const [aiNoticeResult, setAiNoticeResult] = useState(null);
+  const [aiNoticeLoading, setAiNoticeLoading] = useState(false);
+  const [showAiNoticePanel, setShowAiNoticePanel] = useState(false);
+
+  const handleGenerateAiNotice = async (preset = null) => {
+    const payload = preset || aiNoticePrompt;
+    if (!payload.title || !payload.title.trim()) {
+      alert('Please enter a notice topic or title');
+      return;
+    }
+    setAiNoticeLoading(true);
+    try {
+      const res = await fetch('/api/admin/ai/compose-circular', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      setAiNoticeLoading(false);
+      if (data.success && data.data) {
+        setAiNoticeResult(data.data);
+      }
+    } catch (err) {
+      console.error('Error composing AI notice:', err);
+      setAiNoticeLoading(false);
+    }
+  };
+
+  const applyAiNoticeToForm = () => {
+    if (!aiNoticeResult) return;
+    setAnnTitle(aiNoticeResult.subject.replace('CIRCULAR: ', ''));
+    const fullBody = `${aiNoticeResult.circularRef}\nDate: ${aiNoticeResult.date}\n\n${aiNoticeResult.salutation}\n\n${aiNoticeResult.openingText}\n\n${aiNoticeResult.summaryBody}\n\nKey Guidelines:\n• ${aiNoticeResult.guidelines.join('\n• ')}\n\n${aiNoticeResult.closingText}\n\n---\n${aiNoticeResult.signatory}`;
+    setAnnContent(fullBody);
+    setAnnCat('circular');
+    showToast('✨ AI Circular applied to Bulletin form!');
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -442,6 +510,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchDashboardData();
     fetchGallery();
+    fetchAiForecast();
   }, []);
 
   const fetchStats = () => {
@@ -2562,6 +2631,147 @@ export default function AdminDashboard() {
             {activeTab === 'fees' && (
               <div className="space-y-8">
 
+                {/* AI Predictive Financial Analytics & Forecast Bento Card */}
+                <div className="bg-gradient-to-br from-[#1E1B4B] via-[#2E1065] to-[#1E1B4B] text-white rounded-3xl p-6 sm:p-7 space-y-6 shadow-xl border border-indigo-900/50 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 -mt-10 -mr-10 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                  {/* Header Row */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-2 bg-white/10 rounded-xl border border-white/10 text-amber-300">
+                          <Sparkles className="w-5 h-5" />
+                        </span>
+                        <h4 className="text-lg font-bold font-quicksand text-white flex items-center gap-2">
+                          <span>AI Predictive Financial Analytics & Cash Flow Forecast</span>
+                          <span className="text-[10px] bg-amber-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                            AI Model
+                          </span>
+                        </h4>
+                      </div>
+                      <p className="text-xs text-indigo-200 font-medium">
+                        Machine Learning aging analysis, fee default early warning, and 3-month projected cash flow inflows.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={aiForecastLoading}
+                      onClick={() => fetchAiForecast()}
+                      className="self-start sm:self-auto px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-quicksand font-bold text-xs rounded-xl border border-white/15 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${aiForecastLoading ? 'animate-spin text-amber-300' : ''}`} />
+                      <span>{aiForecastLoading ? 'Analyzing...' : 'Refresh AI Forecast'}</span>
+                    </button>
+                  </div>
+
+                  {aiForecast ? (
+                    <div className="space-y-6">
+                      {/* Metric Stat Cards Grid */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-indigo-200">
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Collection Efficiency</span>
+                            <TrendingUp className="w-4 h-4 text-emerald-400" />
+                          </div>
+                          <span className="text-2xl font-black text-emerald-400 font-quicksand block">
+                            {aiForecast.metrics.collectionEfficiency}
+                          </span>
+                          <span className="text-[10px] text-indigo-200/80 block">Institutional target: 80%</span>
+                        </div>
+
+                        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-indigo-200">
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Default Risk Score</span>
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          </div>
+                          <span className="text-2xl font-black text-amber-400 font-quicksand block">
+                            {aiForecast.metrics.defaultRiskScore}
+                          </span>
+                          <span className="text-[10px] text-indigo-200/80 block">Based on overdue frequency</span>
+                        </div>
+
+                        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-indigo-200">
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Overdue Invoices</span>
+                            <XCircle className="w-4 h-4 text-rose-400" />
+                          </div>
+                          <span className="text-2xl font-black text-rose-400 font-quicksand block">
+                            {aiForecast.metrics.overdueCount} Accounts
+                          </span>
+                          <span className="text-[10px] text-indigo-200/80 block">{aiForecast.metrics.paidCount} fully paid accounts</span>
+                        </div>
+
+                        <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-indigo-200">
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Pending Receivables</span>
+                            <DollarSign className="w-4 h-4 text-indigo-300" />
+                          </div>
+                          <span className="text-2xl font-black text-indigo-200 font-quicksand block">
+                            ₹{(aiForecast.metrics.totalPending || 0).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-indigo-200/80 block">Billed: ₹{(aiForecast.metrics.totalBilled || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+
+                      {/* 3-Month Expected Cash Flow Inflow Section */}
+                      <div className="bg-white/5 border border-white/10 p-5 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold font-quicksand text-white uppercase tracking-wider flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-amber-300" />
+                            Next 3-Month Cash Flow Inflow Projections
+                          </span>
+                          <span className="text-[10px] text-indigo-300">Predictive Probability Weighting</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {aiForecast.cashFlowForecast.map((cf, idx) => (
+                            <div key={idx} className="bg-white/5 p-3.5 rounded-xl border border-white/10 space-y-1.5">
+                              <span className="text-[10px] font-bold text-indigo-300 block">{cf.month}</span>
+                              <span className="text-lg font-extrabold text-white font-quicksand block">
+                                ₹{cf.expectedInflow.toLocaleString('en-IN')}
+                              </span>
+                              <div className="flex items-center justify-between text-[10px] text-indigo-200">
+                                <span>Confidence:</span>
+                                <span className={`font-bold ${idx === 0 ? 'text-emerald-400' : idx === 1 ? 'text-amber-300' : 'text-indigo-300'}`}>
+                                  {cf.probability}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* AI Strategic Action Items */}
+                      <div className="bg-white/5 border border-white/10 p-5 rounded-2xl space-y-3">
+                        <span className="text-xs font-bold font-quicksand text-white uppercase tracking-wider flex items-center gap-1.5">
+                          <Target className="w-3.5 h-3.5 text-emerald-400" />
+                          Recommended Strategic Actions for Financial Officer
+                        </span>
+                        <div className="space-y-2">
+                          {aiForecast.strategicActionItems.map((action, aIdx) => (
+                            <div key={aIdx} className="flex items-start gap-2.5 text-xs text-indigo-100 bg-white/5 p-3 rounded-xl border border-white/5">
+                              <span className="text-sm shrink-0">📌</span>
+                              <span className="font-medium leading-relaxed">{action}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <button
+                        type="button"
+                        onClick={() => fetchAiForecast()}
+                        className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-quicksand font-bold text-xs rounded-xl shadow-lg transition-all"
+                      >
+                        ⚡ Run Predictive Financial Analytics Model
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Bento Cash Desk: Real-Time Fees & Remaining Balance */}
                 <div className="bg-[#FAF9FF] border border-[#E9E4FF] rounded-3xl p-6 sm:p-7 space-y-6 shadow-sm">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-[#E9E4FF]">
@@ -3080,51 +3290,295 @@ export default function AdminDashboard() {
 
             {/* TAB 5: Announcements notice board */}
             {activeTab === 'announcements' && (
-              <form onSubmit={handleCreateAnnouncement} className="p-5 space-y-4 border bg-slate-50/50 border-slate-100 rounded-3xl">
-                <h4 className="text-sm font-bold font-quicksand text-slate-800">Publish Notice Board Circular</h4>
+              <div className="space-y-6">
+                {/* AI Official Circular & Notice Writer Card */}
+                <div className="bg-gradient-to-br from-[#1E1B4B] via-[#31104B] to-[#1E1B4B] text-white rounded-3xl p-6 sm:p-7 space-y-6 shadow-xl border border-purple-900/50 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 -mt-10 -mr-10 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+                  
+                  {/* Header Row */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-2 bg-white/10 rounded-xl border border-white/10 text-amber-300">
+                          <Sparkles className="w-5 h-5" />
+                        </span>
+                        <h4 className="text-lg font-bold font-quicksand text-white flex items-center gap-2">
+                          <span>AI Official Circular & Notice Writer</span>
+                          <span className="text-[10px] bg-amber-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Instant AI
+                          </span>
+                        </h4>
+                      </div>
+                      <p className="text-xs text-purple-200 font-medium">
+                        Compose impeccably phrased institutional circulars with official ref numbers, bulleted guidelines, and executive signatures in seconds.
+                      </p>
+                    </div>
 
-                <div className="space-y-1 text-xs">
-                  <label className="font-bold text-slate-600">Notice Title</label>
-                  <input
-                    type="text" required placeholder="e.g. Independence Day Holiday Notification"
-                    value={annTitle} onChange={e => setAnnTitle(e.target.value)}
-                    className="w-full p-3 bg-white border outline-none rounded-xl"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-600">Category</label>
-                    <select value={annCat} onChange={e => setAnnCat(e.target.value)} className="bg-white border rounded-xl p-2.5 w-full outline-none">
-                      <option value="general">General</option>
-                      <option value="circular">Official Circular</option>
-                      <option value="event">PTM / Event Schedule</option>
-                      <option value="emergency">Emergency Alert</option>
-                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiNoticePanel(!showAiNoticePanel)}
+                      className="self-start sm:self-auto px-4 py-2 bg-purple-500 hover:bg-purple-600 active:scale-95 text-white font-quicksand font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>{showAiNoticePanel ? 'Collapse AI Studio' : 'Open AI Circular Studio'}</span>
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-600">Audience Group</label>
-                    <select value={annAudience} onChange={e => setAnnAudience(e.target.value)} className="bg-white border rounded-xl p-2.5 w-full outline-none">
-                      <option value="all">Everyone (All Visitors)</option>
-                      <option value="parents">Parents Only</option>
-                      <option value="teachers">Teachers Only</option>
-                    </select>
+
+                  {/* 1-Click Fast Presets */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold text-purple-200 uppercase tracking-wider block">
+                      1-Click Common School Circular Presets:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                      {[
+                        { title: 'Annual Sports Day & Fun Fair', points: 'Dec 15th, 9:00 AM, school sports ground, wear sneakers, parents cordially invited', tone: 'festive', icon: '🏆' },
+                        { title: 'Monsoon Heavy Rain Holiday Notice', points: 'School closed tomorrow due to weather advisory, online activities provided, transport suspended', tone: 'urgent', icon: '🌧️' },
+                        { title: 'Term-End Parent-Teacher Meeting (PTM)', points: 'Saturday 10:00 AM - 1:00 PM, report card distribution, individual 10-min slots with class teacher', tone: 'official', icon: '👨‍👩‍👧' },
+                        { title: 'Term 2 Fee Clearance & Sibling Concession', points: 'Due date Oct 25th, sibling discount available, digital UPI receipt via portal, late fine waiver until cutoff', tone: 'official', icon: '💳' }
+                      ].map((preset, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          onClick={() => {
+                            setAiNoticePrompt({
+                              title: preset.title,
+                              keyPoints: preset.points,
+                              tone: preset.tone,
+                              audience: 'All Parents & Teachers'
+                            });
+                            setShowAiNoticePanel(true);
+                            handleGenerateAiNotice({
+                              title: preset.title,
+                              keyPoints: preset.points,
+                              tone: preset.tone,
+                              audience: 'All Parents & Teachers'
+                            });
+                          }}
+                          className="text-left p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-300 text-xs transition-all flex items-start gap-2.5 cursor-pointer group"
+                        >
+                          <span className="text-xl p-1 bg-white/10 group-hover:bg-purple-500/30 rounded-xl shrink-0 transition-colors">
+                            {preset.icon}
+                          </span>
+                          <div>
+                            <span className="font-bold text-white block font-quicksand text-xs">
+                              {preset.title}
+                            </span>
+                            <span className="text-[10px] text-purple-300 line-clamp-1">
+                              {preset.tone.toUpperCase()} tone
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {/* Collapsible Custom Input Panel */}
+                  {showAiNoticePanel && (
+                    <div className="bg-white/5 p-5 rounded-2xl border border-white/10 space-y-4 animate-in fade-in duration-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="font-bold text-purple-200">Circular Topic / Event Title</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Science Exhibition & Robotic Demo Fair"
+                            value={aiNoticePrompt.title}
+                            onChange={(e) => setAiNoticePrompt({ ...aiNoticePrompt, title: e.target.value })}
+                            className="w-full bg-white/10 border border-white/20 rounded-xl p-2.5 outline-none font-medium text-white placeholder-purple-300/50 focus:border-amber-300"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-purple-200">Notice Tone</label>
+                          <select
+                            value={aiNoticePrompt.tone}
+                            onChange={(e) => setAiNoticePrompt({ ...aiNoticePrompt, tone: e.target.value })}
+                            className="w-full bg-[#2A174E] border border-white/20 rounded-xl p-2.5 outline-none font-medium text-white focus:border-amber-300"
+                          >
+                            <option value="official">Formal & Administrative (Default)</option>
+                            <option value="festive">Festive, Warm & Celebratory</option>
+                            <option value="urgent">Urgent Safety / Weather Advisory</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-purple-200">Target Audience</label>
+                          <select
+                            value={aiNoticePrompt.audience}
+                            onChange={(e) => setAiNoticePrompt({ ...aiNoticePrompt, audience: e.target.value })}
+                            className="w-full bg-[#2A174E] border border-white/20 rounded-xl p-2.5 outline-none font-medium text-white focus:border-amber-300"
+                          >
+                            <option value="All Parents & Teachers">All Parents & Teachers</option>
+                            <option value="Parents Only">Parents Only</option>
+                            <option value="Teachers & Staff Only">Teachers & Staff Only</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="font-bold text-purple-200">Key Points & Details (Dates, Timing, Dress Code, Guidelines)</label>
+                          <textarea
+                            rows={2}
+                            placeholder="e.g. Friday 9:00 AM, auditorium, parents allowed, bring student ID badge..."
+                            value={aiNoticePrompt.keyPoints}
+                            onChange={(e) => setAiNoticePrompt({ ...aiNoticePrompt, keyPoints: e.target.value })}
+                            className="w-full bg-white/10 border border-white/20 rounded-xl p-2.5 outline-none font-medium text-white placeholder-purple-300/50 focus:border-amber-300 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          disabled={aiNoticeLoading || !aiNoticePrompt.title.trim()}
+                          onClick={() => handleGenerateAiNotice()}
+                          className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-900 font-quicksand font-bold text-xs rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                        >
+                          {aiNoticeLoading ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                              <span>Drafting with AI...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 text-slate-900" />
+                              <span>Draft Official Circular with AI</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Generated Circular Output Preview */}
+                  {aiNoticeResult && (
+                    <div className="bg-white text-slate-800 rounded-2xl p-6 shadow-md border border-purple-100 space-y-4 animate-in fade-in duration-300">
+                      {/* Institutional Letterhead Header */}
+                      <div className="border-b-2 border-slate-900 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div>
+                          <span className="font-black tracking-widest text-[11px] text-[#5B4DF5] uppercase block font-quicksand">
+                            APNA SCHOOL ACADEMY
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Ref: {aiNoticeResult.circularRef}
+                          </span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                          Date: {aiNoticeResult.date}
+                        </span>
+                      </div>
+
+                      {/* Subject & Salutation */}
+                      <div className="space-y-2">
+                        <h5 className="font-bold text-sm text-slate-900 uppercase font-quicksand tracking-wide bg-purple-50/70 p-2.5 rounded-xl border border-purple-100 text-purple-900">
+                          {aiNoticeResult.subject}
+                        </h5>
+                        <p className="text-xs font-bold text-slate-700">
+                          {aiNoticeResult.salutation}
+                        </p>
+                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          {aiNoticeResult.openingText}
+                        </p>
+                      </div>
+
+                      {/* Summary Body */}
+                      <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 text-xs text-slate-700 font-medium whitespace-pre-line leading-relaxed">
+                        {aiNoticeResult.summaryBody}
+                      </div>
+
+                      {/* Guidelines */}
+                      {aiNoticeResult.guidelines && (
+                        <div className="space-y-1.5 text-xs text-slate-700">
+                          <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider block">Important Directives:</span>
+                          <ul className="list-disc pl-5 space-y-1 text-slate-600">
+                            {aiNoticeResult.guidelines.map((g, gIdx) => (
+                              <li key={gIdx}>{g}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-slate-600 italic">
+                        {aiNoticeResult.closingText}
+                      </p>
+
+                      <div className="border-t pt-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="text-[11px] font-bold text-slate-500 whitespace-pre-line">
+                          {aiNoticeResult.signatory}
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                `${aiNoticeResult.subject}\n${aiNoticeResult.circularRef} | Date: ${aiNoticeResult.date}\n\n${aiNoticeResult.salutation}\n\n${aiNoticeResult.openingText}\n\n${aiNoticeResult.summaryBody}\n\n${aiNoticeResult.closingText}\n\n${aiNoticeResult.signatory}`
+                              );
+                              showToast('Copied to clipboard!');
+                            }}
+                            className="flex-1 sm:flex-initial px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-quicksand font-bold text-xs rounded-xl transition-all cursor-pointer"
+                          >
+                            Copy Text
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={applyAiNoticeToForm}
+                            className="flex-1 sm:flex-initial px-4 py-2 bg-gradient-to-r from-[#5B4DF5] to-[#7C3AED] hover:from-[#4A3DE5] hover:to-[#6D28D9] text-white font-quicksand font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Apply to Bulletin Form Below ↓</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-1 text-xs">
-                  <label className="font-bold text-slate-600">Bulletin Content</label>
-                  <textarea
-                    required rows={4} placeholder="Write announcement notices description..."
-                    value={annContent} onChange={e => setAnnContent(e.target.value)}
-                    className="w-full p-3 bg-white border outline-none resize-none rounded-xl"
-                  />
-                </div>
+                {/* Publish Notice Board Circular Form */}
+                <form onSubmit={handleCreateAnnouncement} className="p-5 space-y-4 border bg-slate-50/50 border-slate-100 rounded-3xl">
+                  <h4 className="text-sm font-bold font-quicksand text-slate-800">Publish Notice Board Circular</h4>
 
-                <button type="submit" className="w-full bg-slate-900 text-white font-quicksand font-bold text-xs py-2.5 rounded-xl transition-all shadow">
-                  PUBLISH BULLETIN NOTICE
-                </button>
-              </form>
+                  <div className="space-y-1 text-xs">
+                    <label className="font-bold text-slate-600">Notice Title</label>
+                    <input
+                      type="text" required placeholder="e.g. Independence Day Holiday Notification"
+                      value={annTitle} onChange={e => setAnnTitle(e.target.value)}
+                      className="w-full p-3 bg-white border outline-none rounded-xl"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600">Category</label>
+                      <select value={annCat} onChange={e => setAnnCat(e.target.value)} className="bg-white border rounded-xl p-2.5 w-full outline-none font-semibold text-slate-700">
+                        <option value="general">General</option>
+                        <option value="circular">Official Circular</option>
+                        <option value="event">PTM / Event Schedule</option>
+                        <option value="emergency">Emergency Alert</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600">Audience Group</label>
+                      <select value={annAudience} onChange={e => setAnnAudience(e.target.value)} className="bg-white border rounded-xl p-2.5 w-full outline-none font-semibold text-slate-700">
+                        <option value="all">Everyone (All Visitors)</option>
+                        <option value="parents">Parents Only</option>
+                        <option value="teachers">Teachers Only</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <label className="font-bold text-slate-600">Bulletin Content</label>
+                    <textarea
+                      required rows={6} placeholder="Write announcement notices description or use AI Circular Writer above..."
+                      value={annContent} onChange={e => setAnnContent(e.target.value)}
+                      className="w-full p-3 bg-white border outline-none resize-none rounded-xl font-medium text-slate-700 text-xs"
+                    />
+                  </div>
+
+                  <button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white font-quicksand font-bold text-xs py-2.5 rounded-xl transition-all shadow cursor-pointer active:scale-[0.99]">
+                    PUBLISH BULLETIN NOTICE
+                  </button>
+                </form>
+              </div>
             )}
 
             {/* TAB 6: Gallery Manager */}

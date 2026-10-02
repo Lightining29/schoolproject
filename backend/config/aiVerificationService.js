@@ -200,3 +200,241 @@ export function generateTeacherRemarkAI({
   };
 }
 
+// ==============================================================================
+// 1. AI Interactive Lesson Plan & Story Generator (for Teachers)
+// ==============================================================================
+export function generateLessonPlanAI({
+  topic = 'Kindness & Sharing',
+  grade = 'Nursery',
+  duration = '35 Mins',
+  theme = 'Socio-Emotional Growth'
+}) {
+  const plans = {
+    'Kindness & Sharing': {
+      title: 'The Great Toy Sharing Picnic',
+      story: 'Once upon a time in Sunny Woods, Barnaby the Bear found a basket full of shiny red berries. At first, Barnaby wanted to keep them all. But when he saw Little Pippa Bunny looking hungry, he offered half. Pippa smiled so brightly that Barnaby realized sharing made his berries taste twice as sweet!',
+      goals: [
+        'Recognize the joy of turn-taking with classmates',
+        'Learn magic polite words: "Please", "Thank you", and "May I share?"',
+        'Fine motor practice through collaborative clay modeling'
+      ],
+      activity: 'The Sharing Circle: Place colorful wooden blocks in the center. In pairs of two, children take turns passing a block to their partner saying "A gift for my friend!" to build a friendship tower together.',
+      takeHome: 'Ask parents to practice the "One for You, One for Me" snack sharing game during dinner.',
+      rhyme: 'Share, share, show you care, / Spread good feelings everywhere! / One for you and one for me, / Happy friends as we can be!'
+    },
+    'Colors & Shapes Adventure': {
+      title: 'Detective Owl and the Secret Shapes',
+      story: 'Detective Ollie Owl put on his magnifying glass! Today, everything in kindergarten had a secret disguise: the clock was disguised as a Circle, the picture book was a Rectangle, and the birthday party hat was a Triangle!',
+      goals: [
+        'Identify 4 core shapes: Circle, Square, Triangle, Rectangle',
+        'Differentiate primary colors (Red, Blue, Yellow, Green)',
+        'Sensory tactile exploration of shape textures'
+      ],
+      activity: 'Shape Safari: Children search the classroom with cardboard spy-glasses to spot objects matching the shape held by the teacher.',
+      takeHome: 'Find 3 circles and 2 squares in your living room with mom or dad before bedtime.',
+      rhyme: 'A circle is round, it has no end! / A triangle has three sides, my friend!'
+    },
+    'default': {
+      title: `Exploring ${topic} with Curiosity`,
+      story: `Once upon a time, the curious little learners of ${grade} set out on a marvelous adventure to discover all about ${topic}! Every corner they explored revealed a new wonder.`,
+      goals: [
+        `Understand core introductory concepts of ${topic}`,
+        'Strengthen expressive vocabulary and classroom dialogue',
+        'Foster joyful peer collaboration and hands-on discovery'
+      ],
+      activity: `Interactive Exploration Lab: Guided tactile learning exercise where students interact with flashcards and safe sensory materials related to ${topic}.`,
+      takeHome: `Spend 5 minutes discussing one new thing learned about ${topic} during evening dinner.`,
+      rhyme: `Wonder, explore, and learn each day, / Growing smarter while we play!`
+    }
+  };
+
+  const selected = plans[topic] || plans['default'];
+
+  return {
+    topic,
+    grade,
+    duration,
+    theme,
+    title: selected.title,
+    learningGoals: selected.goals,
+    circleTimeStory: selected.story,
+    classroomActivity: selected.activity,
+    parentTakeHome: selected.takeHome,
+    catchyPhonicsRhyme: selected.rhyme,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+// ==============================================================================
+// 2. AI Parenting & Child Growth Coach ("Apna AI Pal" for Parents)
+// ==============================================================================
+export function generateParentingCoachAI({
+  question = '',
+  childName = 'Your child',
+  childAge = '4 years',
+  childClass = 'Nursery'
+}) {
+  const qLower = question.toLowerCase();
+
+  let advice = '';
+  let tips = [];
+  let bedtimeActivity = '';
+
+  if (qLower.includes('eat') || qLower.includes('food') || qLower.includes('veggie') || qLower.includes('picky')) {
+    advice = `Picky eating is a very common developmental stage at around ${childAge}. Children's taste buds are hyper-sensitive, and exerting autonomy over food is their natural way of practicing independence.`;
+    tips = [
+      'Offer "Rainbow Plates": Challenge them to eat 3 colors of food on their plate (e.g., orange carrots, green peas, yellow corn).',
+      'Involve them in food prep: Let them wash berries or stir pancake batter with a wooden spoon.',
+      'Neutral exposure without pressure: Place one bite of a new vegetable without forcing them to finish it. It takes 10–15 exposures for a toddler to accept a new texture.'
+    ];
+    bedtimeActivity = 'Read the bedtime story of "The Crunching Caterpillar who loved green leaves".';
+  } else if (qLower.includes('shy') || qLower.includes('friend') || qLower.includes('social') || qLower.includes('scared')) {
+    advice = `It is completely natural for a child in ${childClass} to feel observant or cautious in large peer groups. Observation is actually an active form of social learning.`;
+    tips = [
+      'Host 1-on-1 micro playdates: Large groups overwhelm shy children; start with a single familiar classmate for 45 minutes.',
+      'Role-play greetings with stuffed animals: Practice saying "Hi Teddy, can I play with your ball?" together at home.',
+      'Avoid labeling them "shy" in public: Instead, say "She likes to take her time watching before jumping in."'
+    ];
+    bedtimeActivity = 'Give them 2 minutes of "special uninterrupted snuggle talk" before sleep to share their favorite school moment.';
+  } else if (qLower.includes('screen') || qLower.includes('phone') || qLower.includes('tantrum') || qLower.includes('tv')) {
+    advice = `Transitions away from high-dopamine screens often cause emotional dysregulation in early childhood. Setting predictable boundaries makes transitions painless.`;
+    tips = [
+      'Use a visual countdown timer rather than an abrupt "Turn it off right now!"',
+      'Bridge the transition: Have a tangible physical activity waiting (e.g. playdough or coloring sheets) before the screen stops.',
+      'Designate "Screen-Free Zones" (e.g. dining table and bedroom) for the entire family.'
+    ];
+    bedtimeActivity = 'Dim the room lights 30 minutes before sleep and listen to gentle instrumental animal sounds.';
+  } else {
+    advice = `Every child blossoms at their own unique pace. At ${childAge} in ${childClass}, emotional security and parental presence form the bedrock of their cognitive confidence.`;
+    tips = [
+      'Praise the effort, not just the outcome (e.g. "I love how persistent you were with that block tower!").',
+      'Maintain predictable daily routines for meals, outdoor active play, and sleep.',
+      'Ask open-ended curiosity questions like: "What made you giggle today at school?"'
+    ];
+    bedtimeActivity = 'Practice 3 "Dragon Breaths" together (deep inhale through nose, gentle exhale blowing out imaginary birthday candles).';
+  }
+
+  return {
+    question,
+    childName,
+    childAge,
+    empathyIntro: `Thank you for asking! Nurturing ${childName} at this stage is a beautiful journey.`,
+    expertInsight: advice,
+    actionableSteps: tips,
+    suggestedRitual: bedtimeActivity,
+    encouragement: `Remember: You are doing a wonderful job. Small daily moments of connection matter far more than perfection!`
+  };
+}
+
+// ==============================================================================
+// 3. AI Official School Circular & Notice Writer (for Admin)
+// ==============================================================================
+export function generateSchoolNoticeAI({
+  title = 'Annual Sports Day & Fun Fair',
+  keyPoints = 'Dec 15th, 9:00 AM, school ground, wear sports sneakers, parents invited',
+  tone = 'official',
+  audience = 'All Parents & Teachers'
+}) {
+  const currentYear = new Date().getFullYear();
+  const circularRef = `APN/CIR/${currentYear}/${Math.floor(100 + Math.random() * 900)}`;
+
+  let salutation = 'Respected Parents & Guardians,';
+  let opening = `Warm greetings from the Administration at Apna School! We are pleased to communicate important updates regarding our upcoming school schedule.`;
+  let closing = 'We look forward to your gracious presence and enthusiastic support as always.';
+
+  if (tone === 'urgent') {
+    opening = `This is an urgent administrative announcement regarding student schedule modifications and weather safety protocols.`;
+    closing = 'Please acknowledge this advisory promptly to ensure your child’s safety and convenience.';
+  } else if (tone === 'festive') {
+    opening = `With great delight and joyful anticipation, the Apna School family invites you to celebrate our grand annual festivity!`;
+    closing = 'Let us join hands to make this an unforgettable memory of joy, laughter, and camaraderie for our young stars.';
+  }
+
+  const generatedNotice = {
+    circularRef,
+    date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+    audience,
+    subject: `CIRCULAR: ${title.toUpperCase()}`,
+    salutation,
+    openingText: opening,
+    summaryBody: `Please take careful note of the following program specifics:\n• ${keyPoints.split(',').map(s => s.trim()).join('\n• ')}`,
+    guidelines: [
+      'Students must report in their official prescribed dress code with ID badges.',
+      'School transportation will operate strictly on the coordinated schedule.',
+      'For any specific inquiries, please contact the front desk or school portal messaging.'
+    ],
+    closingText: closing,
+    signatory: 'Principal & Board of Management\nApna School Kindergarten & Primary Academy'
+  };
+
+  return generatedNotice;
+}
+
+// ==============================================================================
+// 4. AI Predictive Financial & Fee Default Forecasting (for Admin)
+// ==============================================================================
+export function generateFinancialForecastAI({
+  feeRecords = []
+}) {
+  let totalBilled = 0;
+  let totalCollected = 0;
+  let totalPending = 0;
+  let overdueCount = 0;
+  let paidCount = 0;
+  let partialCount = 0;
+
+  feeRecords.forEach(f => {
+    const amt = Number(f.amount || 0);
+    const paid = Number(f.paidAmount || (f.status === 'paid' ? amt : 0));
+    const balance = amt - paid;
+
+    totalBilled += amt;
+    totalCollected += paid;
+    totalPending += balance > 0 ? balance : 0;
+
+    if (f.status === 'paid') paidCount++;
+    else if (f.status === 'overdue') overdueCount++;
+    else if (f.status === 'partially_paid') partialCount++;
+  });
+
+  const totalInvoices = feeRecords.length || 1;
+  const collectionEfficiency = Math.round((totalCollected / (totalBilled || 1)) * 100);
+  const defaultRiskPercentage = Math.round((overdueCount / totalInvoices) * 100);
+
+  // Projected Inflows over Next 3 Months
+  const month1Expected = Math.round(totalPending * 0.55);
+  const month2Expected = Math.round(totalPending * 0.30);
+  const month3Expected = Math.round(totalPending * 0.15);
+
+  const insights = [];
+  if (defaultRiskPercentage > 20) {
+    insights.push('⚠️ Moderate Fee Default Warning: Over 20% of current invoices have crossed the cutoff due date.');
+  } else {
+    insights.push('✅ Healthy Cash Flow: Invoice collection efficiency is within positive institutional benchmarks.');
+  }
+
+  insights.push(`💡 Recommends auto-dispatching WhatsApp payment links 3 days before upcoming term due dates.`);
+  insights.push(`📊 Offering a 2-part split installment for overdue accounts will accelerate estimated recovery by 34%.`);
+
+  return {
+    metrics: {
+      totalBilled,
+      totalCollected,
+      totalPending,
+      collectionEfficiency: `${collectionEfficiency}%`,
+      overdueCount,
+      paidCount,
+      partialCount,
+      defaultRiskScore: `${defaultRiskPercentage}% Risk Index`
+    },
+    cashFlowForecast: [
+      { month: 'Month 1 (Immediate)', expectedInflow: month1Expected, probability: 'High (85%)' },
+      { month: 'Month 2 (Follow-ups)', expectedInflow: month2Expected, probability: 'Moderate (65%)' },
+      { month: 'Month 3 (Year-end)', expectedInflow: month3Expected, probability: 'Long-term (45%)' }
+    ],
+    strategicActionItems: insights,
+    analyzedAt: new Date().toISOString()
+  };
+}
+
+

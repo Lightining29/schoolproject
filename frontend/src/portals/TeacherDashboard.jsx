@@ -64,6 +64,44 @@ export default function TeacherDashboard() {
   // ----------------------------------------------------
   const [rosterSearch, setRosterSearch] = useState('');
 
+  // ----------------------------------------------------
+  // AI LESSON PLANNER & STORY LAB STATE
+  // ----------------------------------------------------
+  const [lpTopic, setLpTopic] = useState('Kindness & Sharing');
+  const [lpDuration, setLpDuration] = useState('35 Mins');
+  const [lpTheme, setLpTheme] = useState('Socio-Emotional Growth');
+  const [generatedLessonPlan, setGeneratedLessonPlan] = useState(null);
+  const [lpLoading, setLpLoading] = useState(false);
+
+  const handleGenerateLessonPlan = async () => {
+    setLpLoading(true);
+    try {
+      const res = await fetch('/api/portal/teacher/ai-lesson-plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          topic: lpTopic,
+          grade: evalClass,
+          duration: lpDuration,
+          theme: lpTheme
+        })
+      });
+      const data = await res.json();
+      setLpLoading(false);
+      if (data.success && data.data) {
+        setGeneratedLessonPlan(data.data);
+        showToast('✨ AI Interactive Lesson Plan & Story generated!');
+        confetti({ particleCount: 50, spread: 75, origin: { y: 0.6 } });
+      }
+    } catch (err) {
+      console.error(err);
+      setLpLoading(false);
+    }
+  };
+
   // Confirmation Modal
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -621,6 +659,21 @@ export default function TeacherDashboard() {
         >
           <Users className="w-4 h-4" />
           <span>4. Student & Parent Directory ({classStudents.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lessonPlan')}
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-quicksand font-bold text-xs transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'lessonPlan'
+              ? 'bg-[#5B468C] text-white shadow-md'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>5. AI Lesson Plan & Story Lab</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-400 text-slate-900 font-extrabold uppercase">
+            AI Lab
+          </span>
         </button>
       </div>
 
@@ -1472,6 +1525,190 @@ export default function TeacherDashboard() {
                   );
                 })}
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          TAB 5: AI LESSON PLAN & STORY LAB
+      ======================================================== */}
+      {activeTab === 'lessonPlan' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
+            <div className="space-y-1 pb-4 border-b">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold font-quicksand text-slate-800 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <span>AI Interactive Lesson Plan & Story Lab</span>
+                </h3>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-[#5B468C]">
+                  Target: {evalClass}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Generate pedagogical classroom lesson plans, interactive circle time stories, and take-home activities in seconds.
+              </p>
+            </div>
+
+            {/* Topic & Settings Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-semibold">
+              <div className="space-y-1.5">
+                <label className="text-slate-700 font-bold block">1. Select Theme / Topic</label>
+                <select
+                  value={lpTopic}
+                  onChange={(e) => setLpTopic(e.target.value)}
+                  className="w-full bg-white border border-slate-200 p-3 rounded-xl outline-none font-bold text-slate-800 cursor-pointer shadow-2xs"
+                >
+                  <option value="Kindness & Sharing">Kindness & Sharing (Socio-Emotional)</option>
+                  <option value="Colors & Shapes Adventure">Colors & Shapes Adventure (Cognitive)</option>
+                  <option value="Animal Kingdom & Sounds">Animal Kingdom & Habitats (Science)</option>
+                  <option value="Solar System & Twinkling Stars">Solar System & Stars (Discovery)</option>
+                  <option value="Planting Seeds & Nature Care">Planting Seeds & Green Earth (Ecology)</option>
+                  <option value="My Senses & Body Parts">My 5 Senses & Healthy Habits (Biology)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-700 font-bold block">2. Activity Duration</label>
+                <div className="flex gap-2">
+                  {['20 Mins', '35 Mins', '45 Mins'].map(dur => (
+                    <button
+                      key={dur}
+                      type="button"
+                      onClick={() => setLpDuration(dur)}
+                      className={`flex-1 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        lpDuration === dur
+                          ? 'bg-[#5B468C] text-white border-[#5B468C] shadow-2xs'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {dur}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  disabled={lpLoading}
+                  onClick={handleGenerateLessonPlan}
+                  className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-quicksand font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>{lpLoading ? 'Crafting Lesson Plan...' : '✨ Generate Lesson Plan'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Generated Plan Display */}
+            {generatedLessonPlan ? (
+              <div className="bg-gradient-to-b from-purple-50/40 via-white to-slate-50 border-2 border-purple-200 rounded-3xl p-6 space-y-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-purple-100">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full">
+                      Ready for Classroom Delivery
+                    </span>
+                    <h4 className="text-xl font-bold font-quicksand text-slate-800 mt-1">
+                      {generatedLessonPlan.title}
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Grade: <b>{generatedLessonPlan.grade}</b> • Duration: <b>{generatedLessonPlan.duration}</b> • Focus: <b>{generatedLessonPlan.theme}</b>
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${generatedLessonPlan.title}\n\nSTORY:\n${generatedLessonPlan.circleTimeStory}\n\nACTIVITY:\n${generatedLessonPlan.classroomActivity}`);
+                        showToast('Lesson plan copied to clipboard!');
+                      }}
+                      className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs shadow-2xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>Copy Text</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="px-3.5 py-2 bg-[#5B468C] hover:bg-[#4A3875] text-white rounded-xl font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Plan</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+                  {/* Left: Circle Time Story & Rhyme */}
+                  <div className="space-y-4">
+                    <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-2">
+                      <span className="font-bold text-amber-900 uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4 text-amber-600" />
+                        1. Circle Time Story Script (Read Aloud)
+                      </span>
+                      <p className="text-slate-700 leading-relaxed text-xs italic">
+                        "{generatedLessonPlan.circleTimeStory}"
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-pink-50/60 border border-pink-200/80 rounded-2xl space-y-2">
+                      <span className="font-bold text-pink-900 uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                        <Heart className="w-4 h-4 text-pink-600" />
+                        2. Catchy Phonics & Movement Rhyme
+                      </span>
+                      <p className="text-pink-950 font-medium whitespace-pre-line text-xs font-mono">
+                        {generatedLessonPlan.catchyPhonicsRhyme}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: Goals, Hands-On Activity & Take-Home */}
+                  <div className="space-y-4">
+                    <div className="p-4 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl space-y-2">
+                      <span className="font-bold text-emerald-900 uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        3. Core Pedagogical Goals
+                      </span>
+                      <ul className="space-y-1.5 text-slate-700">
+                        {(generatedLessonPlan.learningGoals || []).map((g, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-xs">
+                            <span className="text-emerald-600 font-bold">•</span>
+                            <span>{g}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-1.5">
+                      <span className="font-bold text-purple-900 uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                        <Palette className="w-4 h-4 text-purple-600" />
+                        4. Sensory Classroom Activity
+                      </span>
+                      <p className="text-slate-700 leading-relaxed text-xs">
+                        {generatedLessonPlan.classroomActivity}
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-blue-50/60 border border-blue-200/80 rounded-2xl space-y-1.5">
+                      <span className="font-bold text-blue-900 uppercase text-[10px] tracking-wider block flex items-center gap-1.5">
+                        <Send className="w-4 h-4 text-blue-600" />
+                        5. Take-Home Activity for Parents
+                      </span>
+                      <p className="text-slate-700 leading-relaxed text-xs">
+                        {generatedLessonPlan.parentTakeHome}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div className="py-16 text-center text-slate-400 font-quicksand text-xs border border-dashed rounded-3xl bg-slate-50/50">
+                <Sparkles className="w-8 h-8 mx-auto text-purple-300 mb-2" />
+                Select a topic above and click "✨ Generate Lesson Plan" to create a fresh classroom guide!
+              </div>
+            )}
 
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Smile, Award, Clock, HelpCircle, CreditCard, Clipboard, CheckCircle, FileText, Download, AlertCircle, Sparkles } from 'lucide-react';
+import { Smile, Award, Clock, HelpCircle, CreditCard, Clipboard, CheckCircle, FileText, Download, AlertCircle, Sparkles, Send, BookOpen, Heart, Coffee, Sun, Moon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import ResultCardModal from '../components/ResultCardModal.jsx';
@@ -17,6 +17,42 @@ export default function ParentDashboard() {
   const [payingFeeId, setPayingFeeId] = useState(null);
   const [activeResultCard, setActiveResultCard] = useState(null);
   const [activeIdCard, setActiveIdCard] = useState(null);
+
+  // AI Parent Coach state
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiCoachResult, setAiCoachResult] = useState(null);
+  const [aiCoachLoading, setAiCoachLoading] = useState(false);
+
+  const handleAskAiCoach = async (presetQ = null) => {
+    const q = presetQ || aiQuestion;
+    if (!q || !q.trim()) return alert('Please choose a topic or enter a question');
+    setAiCoachLoading(true);
+    setAiCoachResult(null);
+
+    try {
+      const res = await fetch('/api/portal/parent/ai-parent-coach', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          question: q,
+          childName: child?.name || 'Your child',
+          childAge: '4 years',
+          childClass: child?.class || 'Nursery'
+        })
+      });
+      const data = await res.json();
+      setAiCoachLoading(false);
+      if (data.success && data.data) {
+        setAiCoachResult(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+      setAiCoachLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Parent profile children fetch
@@ -374,6 +410,21 @@ export default function ParentDashboard() {
             <CreditCard className="w-4.5 h-4.5" />
             <span>Fee Ledger</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('aiCoach')}
+            className={`w-full text-left font-quicksand font-bold text-xs p-3 flex items-center space-x-3 transition-all ${
+              activeTab === 'aiCoach' ? 'clay-sidebar-item-active' : 'rounded-2xl text-white/80 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Sparkles className="w-4.5 h-4.5 text-amber-300 shrink-0" />
+            <div className="flex items-center justify-between w-full">
+              <span>Apna AI Parent Coach</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-400 text-slate-900 font-extrabold uppercase">
+                AI Pal
+              </span>
+            </div>
+          </button>
         </div>
 
         {/* Contents Column */}
@@ -653,6 +704,173 @@ export default function ParentDashboard() {
                     </div>
                   ) : (
                     <p className="text-xs text-slate-500">No invoices generated for this student registry.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 6: Apna AI Parent Coach */}
+              {activeTab === 'aiCoach' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-orange-50 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 bg-amber-100 text-amber-700 rounded-xl">
+                          <Heart className="w-5 h-5 fill-amber-400 text-amber-600" />
+                        </span>
+                        <h3 className="font-quicksand font-bold text-lg text-slate-800">Apna AI Parent Coach & Growth Pal</h3>
+                        <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-amber-300">
+                          AI Powered
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Empathetic, research-backed parenting guidance tailored to {child?.name || 'your child'}'s developmental age and kindergarten routine.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 1-Click Common Parenting Scenarios */}
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Quick Topics & Questions:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {[
+                        { icon: '🥦', title: 'Picky Eating & Meal Struggles', prompt: 'How do I handle picky eating and encourage nutritious meals without forcing?' },
+                        { icon: '🧸', title: 'Peer Confidence & Shyness', prompt: 'How can I help my child feel more confident making friends in class?' },
+                        { icon: '📱', title: 'Gentle Screen-Time Transitions', prompt: 'What is the best way to handle screen time limits without crying and tantrums?' },
+                        { icon: '🌙', title: 'Calm Bedtime & Night Sleep', prompt: 'How can we establish a soothing bedtime routine for deep, calm sleep?' }
+                      ].map((preset, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setAiQuestion(preset.prompt);
+                            handleAskAiCoach(preset.prompt);
+                          }}
+                          className="text-left p-3 rounded-2xl bg-white hover:bg-amber-50/60 border border-slate-200/80 hover:border-amber-300 text-xs transition-all shadow-xs group flex items-start gap-2.5 cursor-pointer"
+                        >
+                          <span className="text-xl p-1 bg-slate-50 group-hover:bg-amber-100 rounded-xl shrink-0 transition-colors">
+                            {preset.icon}
+                          </span>
+                          <div>
+                            <span className="font-bold text-slate-800 group-hover:text-amber-900 block font-quicksand">
+                              {preset.title}
+                            </span>
+                            <span className="text-[10px] text-slate-400 line-clamp-1">
+                              {preset.prompt}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Freeform Prompt Box */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Have a specific question about {child?.name || 'your child'}?
+                    </label>
+                    <div className="relative">
+                      <textarea
+                        value={aiQuestion}
+                        onChange={(e) => setAiQuestion(e.target.value)}
+                        placeholder={`e.g. ${child?.name || 'My child'} gets upset when separating in the morning at the school gate, what should I say?`}
+                        rows={3}
+                        className="w-full text-xs p-3.5 pr-12 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-400 text-slate-800 placeholder-slate-400 resize-none font-medium"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-[10px] text-slate-400 italic">
+                        Tip: You can ask in English, Hindi, or Hinglish!
+                      </span>
+                      <button
+                        type="button"
+                        disabled={aiCoachLoading || !aiQuestion.trim()}
+                        onClick={() => handleAskAiCoach()}
+                        className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold font-quicksand rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+                      >
+                        {aiCoachLoading ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Thinking...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                            <span>Ask AI Coach</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* AI Response Display */}
+                  {aiCoachResult && (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                      {/* Empathy Card */}
+                      <div className="bg-gradient-to-r from-rose-50 to-amber-50 p-4.5 rounded-2xl border border-rose-200/70 space-y-1.5">
+                        <div className="flex items-center gap-2 text-rose-700">
+                          <Heart className="w-4 h-4 fill-rose-400" />
+                          <span className="font-quicksand font-bold text-xs uppercase tracking-wider">A Gentle Note For You</span>
+                        </div>
+                        <p className="text-xs text-rose-950 font-medium leading-relaxed">
+                          {aiCoachResult.empathyIntro}
+                        </p>
+                      </div>
+
+                      {/* Developmental Insight */}
+                      <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                        <div className="flex items-center gap-2 text-indigo-700">
+                          <BookOpen className="w-4 h-4 text-indigo-600" />
+                          <h4 className="font-quicksand font-bold text-xs uppercase tracking-wider">What Child Psychology Says</h4>
+                        </div>
+                        <p className="text-xs text-slate-700 font-medium leading-relaxed bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                          {aiCoachResult.expertInsight}
+                        </p>
+                      </div>
+
+                      {/* 3 Actionable Home Steps */}
+                      {aiCoachResult.actionableSteps && aiCoachResult.actionableSteps.length > 0 && (
+                        <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                          <div className="flex items-center gap-2 text-emerald-700">
+                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                            <h4 className="font-quicksand font-bold text-xs uppercase tracking-wider">Actionable Steps To Try Today</h4>
+                          </div>
+                          <div className="space-y-2.5">
+                            {aiCoachResult.actionableSteps.map((step, sIdx) => (
+                              <div key={sIdx} className="flex items-start gap-3 p-3 bg-emerald-50/40 rounded-xl border border-emerald-100 text-xs">
+                                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center shrink-0 text-[10px] mt-0.5">
+                                  {sIdx + 1}
+                                </span>
+                                <p className="text-slate-800 font-medium leading-relaxed">
+                                  {step}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bedtime / Calming Ritual */}
+                      {aiCoachResult.suggestedRitual && (
+                        <div className="bg-[#1E1B4B] text-white p-4.5 rounded-2xl shadow-md space-y-2">
+                          <div className="flex items-center gap-2 text-indigo-200">
+                            <Moon className="w-4 h-4 text-amber-300" />
+                            <h4 className="font-quicksand font-bold text-xs uppercase tracking-wider">Tonight's Calming Connection Ritual</h4>
+                          </div>
+                          <p className="text-xs text-indigo-100 font-medium leading-relaxed bg-white/10 p-3 rounded-xl border border-white/10">
+                            ✨ {aiCoachResult.suggestedRitual}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Cheering Closing */}
+                      {aiCoachResult.encouragement && (
+                        <div className="text-center p-3 text-xs text-slate-500 font-medium italic">
+                          "{aiCoachResult.encouragement}"
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

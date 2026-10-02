@@ -18,6 +18,7 @@ import Event from '../models/Event.js';
 import { protect, authorize } from '../middleware/auth.js';
 import mockStore from '../config/mockStore.js';
 import { uploadGallery, uploadAdmissions } from '../middleware/upload.js';
+import { generateSchoolNoticeAI, generateFinancialForecastAI } from '../config/aiVerificationService.js';
 
 const router = express.Router();
 
@@ -1798,6 +1799,42 @@ router.post('/fees/collect-cash', async (req, res) => {
   }
 });
 
-// Document serving endpoints relocated to the top (public routes)
+// @desc    AI Predictive Financial Analytics & Fee Default Forecasting
+// @route   GET /api/admin/ai/financial-forecast
+// @access  Private (Admin)
+router.get('/ai/financial-forecast', protect, authorize('admin'), async (req, res) => {
+  try {
+    let feeRecords = [];
+    if (mockStore.isMock) {
+      feeRecords = await mockStore.find('fees');
+    } else {
+      feeRecords = await Fee.find().lean();
+    }
+
+    const forecast = generateFinancialForecastAI({ feeRecords });
+    res.json({ success: true, data: forecast });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    AI School Notice & Circular Writer
+// @route   POST /api/admin/ai/compose-circular
+// @access  Private (Admin)
+router.post('/ai/compose-circular', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { title, keyPoints, tone, audience } = req.body;
+    const circular = generateSchoolNoticeAI({
+      title,
+      keyPoints,
+      tone,
+      audience
+    });
+    res.json({ success: true, data: circular });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 export default router;
+
