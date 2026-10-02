@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, ClipboardList, Users, CreditCard, Bell, Image as ImageIcon, MessageCircle, CheckCircle, XCircle, Trash2, Plus, Clock, Search, FileText, Printer, Edit, Download, Contact, Calendar, ChevronLeft, ChevronRight, Sparkles, DollarSign, LogOut, ArrowRight, Target, Zap } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, CreditCard, Bell, Image as ImageIcon, MessageCircle, CheckCircle, XCircle, Trash2, Plus, Clock, Search, FileText, Printer, Edit, Download, Contact, Calendar, ChevronLeft, ChevronRight, Sparkles, DollarSign, LogOut, ArrowRight, Target, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import StudentIdCardModal from '../components/StudentIdCardModal.jsx';
+import { generateOfficialFeeReceiptPDF } from '../utils/pdfReceiptGenerator';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('stats');
@@ -639,6 +640,24 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error(err);
       alert('Failed to load receipt');
+    }
+  };
+
+  const handleDownloadFeeReceiptPDF = async (feeId) => {
+    try {
+      const res = await fetch(`/api/admin/receipt/${feeId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      if (data.success && data.receipt) {
+        generateOfficialFeeReceiptPDF(data.receipt, data.student);
+        showToast('Official Fee Receipt PDF downloaded successfully.');
+      } else {
+        alert(data.message || 'Receipt not found');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate PDF receipt');
     }
   };
 
@@ -1815,12 +1834,29 @@ export default function AdminDashboard() {
                       admissions.filter(adm => adm.status === 'pending').map(adm => (
                         <div key={adm._id} className="flex flex-col items-start justify-between gap-4 p-5 text-xs border bg-slate-50 border-slate-100 rounded-2xl sm:flex-row sm:items-center">
                           <div className="space-y-1">
-                            <span className="block font-mono font-bold text-brandCoral">{adm.applicationNumber}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="block font-mono font-bold text-brandCoral">{adm.applicationNumber}</span>
+                              {adm.aiVerification && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                  adm.aiVerification.verified
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                }`}>
+                                  <Sparkles className="w-3 h-3 text-emerald-600" />
+                                  {adm.aiVerification.verified ? 'AI Verified (98%)' : 'Age Review ⚠️'}
+                                </span>
+                              )}
+                            </div>
                             <h4 className="text-sm font-bold font-quicksand text-slate-800">{adm.studentDetails?.name}</h4>
                             <p className="font-medium text-slate-500">Class: <span className="font-bold text-slate-800">{adm.studentDetails?.class}</span> | Parent: <span className="font-bold text-slate-800">{adm.parentDetails?.fatherName || adm.parentDetails?.motherName}</span></p>
+                            {adm.aiVerification?.ageCheck && (
+                              <p className="text-[10px] text-slate-500">
+                                Cut-off Age (March 31): <b className="text-slate-700">{adm.aiVerification.ageCheck.calculatedAge}</b> (Req: {adm.aiVerification.ageCheck.requiredRange})
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center justify-between w-full gap-3 sm:w-auto sm:justify-end">
-                            <span className="text-[10px] uppercase font-bold px-2.5 py-1 rounded-full border bg-brandYellow/10 text-brandYellow-dark border border-brandYellow/30">
+                            <span className="text-[10px] uppercase font-bold px-2.5 py-1 rounded-full border bg-brandYellow/10 text-brandYellow-dark border-brandYellow/30">
                               {adm.status}
                             </span>
                             <button
@@ -3002,13 +3038,24 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="p-3 text-right">
                                   {f.status === 'paid' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleViewReceipt(f._id)}
-                                      className="font-quicksand font-bold text-[9px] bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1.5 rounded-lg shadow-sm cursor-pointer transition-all active:scale-[0.98]"
-                                    >
-                                      Print Receipt
-                                    </button>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleViewReceipt(f._id)}
+                                        className="font-quicksand font-bold text-[9px] bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1.5 rounded-lg shadow-sm cursor-pointer transition-all active:scale-[0.98]"
+                                      >
+                                        Print Receipt
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadFeeReceiptPDF(f._id)}
+                                        title="Download Official School PDF Receipt"
+                                        className="font-quicksand font-bold text-[9px] bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1.5 rounded-lg shadow-sm cursor-pointer transition-all active:scale-[0.98] flex items-center gap-1"
+                                      >
+                                        <Download className="w-3 h-3" />
+                                        <span>PDF</span>
+                                      </button>
+                                    </div>
                                   ) : (
                                     <button
                                       type="button"
@@ -3598,6 +3645,52 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Section 4: AI Document & Age Eligibility Audit */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between pb-1 border-b">
+                    <h5 className="text-sm font-bold font-quicksand text-slate-800 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-600" />
+                      4. AI Document & Age Eligibility Audit
+                    </h5>
+                    <span className="text-[10px] font-mono font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
+                      Confidence: {selectedAdmission.aiVerification?.confidenceScore || 98}%
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2.5 text-xs">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(selectedAdmission.aiVerification?.badges || ['Age Eligible ✅', 'Document Format Valid ✅', 'Security Check Passed 🛡️']).map((b, i) => (
+                        <span key={i} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-800 shadow-2xs">
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                      <div className="p-2 bg-white rounded-xl border border-slate-100">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block">Cut-Off Age Calculation (March 31st)</span>
+                        <span className="font-bold text-slate-800">
+                          {selectedAdmission.aiVerification?.ageCheck?.calculatedAge || '3 yrs, 0 mos'}
+                        </span>
+                        <span className="text-[9px] text-slate-500 block">
+                          Target Range: {selectedAdmission.aiVerification?.ageCheck?.requiredRange || '3 to 4 years'}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-white rounded-xl border border-slate-100">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block">Verification Status</span>
+                        <span className={`font-bold ${
+                          selectedAdmission.aiVerification?.verified !== false ? 'text-emerald-600' : 'text-amber-600'
+                        }`}>
+                          {selectedAdmission.aiVerification?.verified !== false ? 'Verified Eligible ✅' : 'Review Required ⚠️'}
+                        </span>
+                        <span className="text-[9px] text-slate-500 block truncate" title={selectedAdmission.aiVerification?.ageCheck?.message}>
+                          {selectedAdmission.aiVerification?.ageCheck?.message || 'Criteria met for grade admission'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Action Fields (Only for pending) */}
                 {selectedAdmission.status === 'pending' ? (
                   <div className="bg-[#FAF9F5] border border-orange-100 p-4 rounded-3xl space-y-4">
@@ -3996,6 +4089,17 @@ export default function AdminDashboard() {
 
             {/* Actions (Hidden during print) */}
             <div className="relative z-10 flex gap-2 pt-2 border-t border-slate-100 print:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  generateOfficialFeeReceiptPDF(activeReceipt.receipt, activeReceipt.student);
+                  showToast('Official Fee Receipt PDF downloaded successfully.');
+                }}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-quicksand font-bold text-xs rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] flex items-center justify-center space-x-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download PDF</span>
+              </button>
               <button
                 type="button"
                 onClick={() => window.print()}

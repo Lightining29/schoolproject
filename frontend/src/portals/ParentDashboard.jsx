@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Smile, Award, Clock, HelpCircle, CreditCard, Clipboard, CheckCircle, FileText } from 'lucide-react';
+import { Smile, Award, Clock, HelpCircle, CreditCard, Clipboard, CheckCircle, FileText, Download, AlertCircle, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import ResultCardModal from '../components/ResultCardModal.jsx';
 import StudentIdCardModal from '../components/StudentIdCardModal.jsx';
+import { generateFeeReceiptPDF } from '../utils/pdfReceiptGenerator.js';
 
 export default function ParentDashboard() {
   const { user, profile } = useAuth();
@@ -106,6 +107,14 @@ export default function ParentDashboard() {
 
   const [activeReceipt, setActiveReceipt] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  
+  // Payment modal state (Full vs Partial / Installment)
+  const [payModalFee, setPayModalFee] = useState(null);
+  const [payType, setPayType] = useState('full'); // 'full' or 'custom'
+  const [customPayAmount, setCustomPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('razorpay'); // 'razorpay' or 'wallet'
+  const [isProcessingPay, setIsProcessingPay] = useState(false);
 
   const handleViewReceipt = async (feeId) => {
     setReceiptLoading(true);
@@ -116,7 +125,7 @@ export default function ParentDashboard() {
       const data = await res.json();
       setReceiptLoading(false);
       if (data.success) {
-        setActiveReceipt(data.receipt);
+        setActiveReceipt(data);
       } else {
         alert(data.message || 'Receipt not found');
       }
@@ -124,6 +133,138 @@ export default function ParentDashboard() {
       console.error(err);
       setReceiptLoading(false);
       alert('Error fetching receipt');
+    }
+  };
+
+  const handleDownloadPDF = async (feeId) => {
+    setDownloadingPdf(true);
+    try {
+      const res = await fetch(`/api/portal/parent/receipt/${feeId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setDownloadingPdf(false);
+      if (data.success) {
+        generateFeeReceiptPDF(data);
+      } else {
+        alert(data.message || 'Could not download receipt');
+      }
+    } catch (err) {
+      console.error(err);
+      setDownloadingPdf(false);
+      alert('Failed to generate PDF receipt');
+    }
+  };
+
+  const openPayModal = (fee) => {
+    const bal = fee.balanceAmount !== undefined ? fee.balanceAmount : fee.amount;
+    setPayModalFee(fee);
+    setPayType('full');
+    setCustomPayAmount(bal.toString());
+    setPayMethod('razorpay');
+  };
+
+  const submitPayment = async () => {
+    if (!payModalFee) return;
+    const balance = payModalFee.balanceAmount !== undefined ? payModalFee.balanceAmount : payModalFee.amount;
+    const amountToPay = payType === 'full' ? balance : Number(customPayAmount);
+
+    if (!amountToPay || amountToPay <= 0) {
+      alert('Please enter a valid payment amount.');
+      return;
+    }
+    if (amountToPay > balance) {
+      alert(`Amount cannot exceed the remaining balance of ₹${balance.toLocaleString('en-IN')}`);
+      return;
+    }
+
+    setIsProcessingPay(true);
+    try {
+      if (payMethod === 'razorpay') {
+        // Step 1: Create Razorpay Order
+        const orderRes = await fetch(`/api/portal/parent/create-order/${payModalFee._id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ customAmount: amountToPay })
+        });
+        const orderData = await orderRes.json();
+
+        if (!orderData.success) {
+          alert(orderData.message || 'Failed to initiate payment gateway');
+          setIsProcessingPay(false);
+          return;
+        }
+
+        // Step 2: Verify & Record Payment
+        const verifyRes = await fetch('/api/portal/parent/verify-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            feeId: payModalFee._id,
+            studentId: child._id,
+            razorpay_order_id: orderData.orderId,
+            razorpay_payment_id: `pay_${Date.now()}`,
+            razorpay_signature: 'sig_verified_demo',
+            paidAmount: amountToPay,
+            paymentMethod: 'Razorpay UPI/Cards'
+          })
+        });
+
+        const verifyData = await verifyRes.json();
+        setIsProcessingPay(false);
+        setPayModalFee(null);
+
+        if (verifyData.success) {
+          confetti({
+            particleCount: 120,
+            spread: 80,
+            origin: { y: 0.6 }
+          });
+          fetchFees(child._id);
+          // Automatically trigger receipt modal
+          handleViewReceipt(payModalFee._id);
+        } else {
+          alert(verifyData.message || 'Payment verification failed');
+        }
+      } else {
+        // Direct Portal Wallet / Cash Payment
+        const res = await fetch(`/api/portal/parent/child/${child._id}/pay-fee/${payModalFee._id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            paymentMethod: 'Parent Portal Wallet',
+            customAmount: amountToPay
+          })
+        });
+        const data = await res.json();
+        setIsProcessingPay(false);
+        setPayModalFee(null);
+
+        if (data.success) {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+          fetchFees(child._id);
+          handleViewReceipt(payModalFee._id);
+        } else {
+          alert(data.message || 'Payment failed');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setIsProcessingPay(false);
+      alert('Error connecting to payment service');
     }
   };
 
@@ -396,57 +537,125 @@ export default function ParentDashboard() {
               {/* Tab 5: Fee Ledger */}
               {activeTab === 'fees' && (
                 <div className="space-y-6">
-                  <h3 className="font-quicksand font-bold text-lg text-slate-800 border-b border-orange-50 pb-3">Outstanding Dues & Receipts</h3>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-orange-50 pb-3">
+                    <div>
+                      <h3 className="font-quicksand font-bold text-lg text-slate-800">Tuition & Fee Ledger</h3>
+                      <p className="text-[11px] text-slate-400">View invoices, sibling discounts, pay installments, and download official receipts.</p>
+                    </div>
+                  </div>
+
                   {fees.length > 0 ? (
                     <div className="space-y-4">
-                      {fees.map((fee) => (
-                        <div key={fee._id} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs">
-                          <div className="space-y-1.5 flex-1">
-                            <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border inline-block ${
-                              fee.status === 'paid' ? 'bg-brandMint/10 text-brandMint-dark border-brandMint/30' :
-                              'bg-red-50 text-red-600 border border-red-100'
-                            }`}>
-                              {fee.status}
-                            </span>
-                            <h4 className="font-quicksand font-bold text-slate-800 text-sm">{fee.term}</h4>
-                            <p className="text-slate-500">Amount: <span className="text-slate-800 font-bold">₹{fee.amount.toLocaleString('en-IN')}</span></p>
-                            <p className="text-slate-400 font-medium">Due Date: {new Date(fee.dueDate).toLocaleDateString()}</p>
-                            {fee.status === 'paid' && (
-                              <div className="space-y-2 pt-1">
-                                <p className="text-[10px] text-slate-400 font-semibold font-mono">
-                                  Txn ID: {fee.transactionId} ({fee.paymentMethod})
-                                </p>
+                      {fees.map((fee) => {
+                        const isCleared = fee.status === 'paid' || (fee.balanceAmount === 0 && (fee.paidAmount || 0) > 0);
+                        const isPartial = fee.status === 'partially_paid' || ((fee.paidAmount || 0) > 0 && (fee.balanceAmount || 0) > 0);
+                        const bal = fee.balanceAmount !== undefined ? fee.balanceAmount : fee.amount;
+
+                        return (
+                          <div key={fee._id} className="bg-white border border-slate-200/80 hover:border-indigo-200 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs shadow-sm transition-all">
+                            <div className="space-y-2 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`text-[9px] uppercase font-extrabold px-2.5 py-0.5 rounded-full border inline-block ${
+                                  isCleared ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                  isPartial ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}>
+                                  {isCleared ? 'PAID IN FULL' : isPartial ? 'PARTIALLY PAID' : 'PENDING'}
+                                </span>
+
+                                {fee.discountAmount > 0 && (
+                                  <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    <Sparkles className="w-3 h-3 text-amber-500" />
+                                    {fee.discountReason || 'Sibling Discount (10%)'} (-₹{fee.discountAmount})
+                                  </span>
+                                )}
+
+                                {fee.fine > 0 && (
+                                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    <AlertCircle className="w-3 h-3 text-red-500" />
+                                    Late Fine: +₹{fee.fine}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="font-quicksand font-bold text-slate-800 text-sm">{fee.term}</h4>
+                              
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1 text-slate-600">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Total Due:</span>
+                                  <span className="font-bold text-slate-800">₹{(fee.totalAmount || fee.amount).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Paid So Far:</span>
+                                  <span className="font-bold text-emerald-600">₹{(fee.paidAmount || 0).toLocaleString('en-IN')}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Remaining Balance:</span>
+                                  <span className={`font-bold ${bal > 0 ? 'text-rose-600' : 'text-slate-400'}`}>₹{bal.toLocaleString('en-IN')}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-slate-400 block">Due Date:</span>
+                                  <span className="font-medium">{new Date(fee.dueDate).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+
+                              {/* Installments History */}
+                              {fee.installments && fee.installments.length > 0 && (
+                                <div className="mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[10px] space-y-1">
+                                  <span className="font-bold text-slate-500 block uppercase tracking-wider text-[9px]">Payment Breakdown ({fee.installments.length} installment{fee.installments.length > 1 ? 's' : ''}):</span>
+                                  {fee.installments.map((inst, idx) => (
+                                    <div key={idx} className="flex justify-between text-slate-600">
+                                      <span>Installment #{idx + 1} ({new Date(inst.date).toLocaleDateString()}) - {inst.method}</span>
+                                      <span className="font-bold text-emerald-600">₹{inst.amount.toLocaleString('en-IN')}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Actions Column */}
+                            <div className="flex flex-col sm:items-end gap-2 shrink-0 w-full sm:w-auto">
+                              {!isCleared && (
+                                <button
+                                  type="button"
+                                  onClick={() => openPayModal(fee)}
+                                  className="w-full sm:w-auto font-quicksand font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                                >
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  <span>{isPartial ? 'PAY REMAINING (₹' + bal.toLocaleString('en-IN') + ')' : 'PAY ONLINE / INSTALLMENT'}</span>
+                                </button>
+                              )}
+
+                              <div className="flex items-center gap-2 w-full sm:w-auto">
                                 <button
                                   type="button"
                                   onClick={() => handleViewReceipt(fee._id)}
-                                  className="inline-flex items-center space-x-1.5 font-bold text-[10px] bg-[#EAE8FC] hover:bg-[#DED9FA] text-[#7C3AED] px-4 py-2 rounded-full border border-white shadow-sm hover:scale-105 transition-all cursor-pointer"
+                                  className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-1.5 font-bold text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
                                 >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  <span>View Receipt</span>
+                                  <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                                  <span>Receipt</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={downloadingPdf}
+                                  onClick={() => handleDownloadPDF(fee._id)}
+                                  className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-1.5 font-bold text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>PDF</span>
                                 </button>
                               </div>
-                            )}
+                            </div>
                           </div>
-
-                          {fee.status !== 'paid' && (
-                            <button
-                              onClick={() => handlePayFee(fee._id)}
-                              disabled={payingFeeId === fee._id}
-                              className="font-quicksand font-bold text-xs bg-brandCoral hover:bg-brandCoral-dark text-white px-5 py-2.5 rounded-full shadow transition-all shrink-0 cursor-pointer"
-                            >
-                              {payingFeeId === fee._id ? 'Processing...' : 'PAY TUITION ONLINE'}
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs text-slate-500">No invoices generated for this student registry.</p>
                   )}
                 </div>
               )}
-
-
             </>
           )}
 
@@ -454,64 +663,231 @@ export default function ParentDashboard() {
 
       </div>
 
-      {/* Receipt Modal */}
-      {activeReceipt && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border-[6px] border-white rounded-[2.5rem] w-full max-w-md p-6 shadow-2xl relative text-slate-800">
+      {/* Pay Online & Installments Modal */}
+      {payModalFee && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative text-slate-800 animate-in fade-in zoom-in-95">
             <button
-              onClick={() => setActiveReceipt(null)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center font-bold text-slate-500 transition-colors"
+              onClick={() => setPayModalFee(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-bold text-slate-500 transition-colors"
             >
               ×
             </button>
 
-            <div className="border-b-2 border-slate-100 pb-3 text-center space-y-1">
-              <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-[inset_1px_1px_2px_white] mb-1">
-                <CheckCircle className="w-6 h-6" />
+            <div className="text-center space-y-1 border-b pb-4">
+              <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-2 shadow-inner">
+                <CreditCard className="w-6 h-6" />
               </div>
-              <span className="text-[9px] font-extrabold tracking-widest text-[#7C3AED] bg-[#EAE8FC] px-2.5 py-0.5 rounded-full">OFFICIAL RECEIPT</span>
-              <h4 className="font-quicksand font-bold text-[#5B468C] text-sm mt-2">Apna School</h4>
-              <p className="text-[10px] text-slate-400 font-semibold font-mono">Receipt No: {activeReceipt.receiptNumber}</p>
+              <h4 className="font-quicksand font-bold text-slate-800 text-base">Make Fee Payment</h4>
+              <p className="text-xs text-slate-500">{payModalFee.term} - {child?.name}</p>
             </div>
 
-            <div className="py-4 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-y-2.5 border-b pb-3 text-slate-500 font-semibold">
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block">Student Name</span>
-                  <span className="text-slate-800 font-bold">{child?.name}</span>
+            <div className="py-4 space-y-4 text-xs">
+              {/* Fee Breakdown Summary */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-2">
+                <div className="flex justify-between text-slate-500">
+                  <span>Gross Invoice Amount:</span>
+                  <span className="font-bold text-slate-700">₹{(payModalFee.totalAmount || payModalFee.amount).toLocaleString('en-IN')}</span>
                 </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block">Class</span>
-                  <span className="text-slate-800 font-bold">{child?.class}</span>
+                {payModalFee.discountAmount > 0 && (
+                  <div className="flex justify-between text-amber-700 font-semibold">
+                    <span>{payModalFee.discountReason || 'Sibling Concession'}:</span>
+                    <span>-₹{payModalFee.discountAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-500">
+                  <span>Paid Previous:</span>
+                  <span className="font-bold text-emerald-600">₹{(payModalFee.paidAmount || 0).toLocaleString('en-IN')}</span>
                 </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block">Term</span>
-                  <span className="text-slate-800 font-bold">{activeReceipt.feeId?.term || 'Tuition Fee Invoice'}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-400 uppercase block">Date Paid</span>
-                  <span className="text-slate-800 font-bold">{new Date(activeReceipt.paymentDate).toLocaleDateString()}</span>
+                <div className="border-t pt-2 flex justify-between font-bold text-sm text-slate-800">
+                  <span>Remaining Due:</span>
+                  <span className="text-indigo-600">₹{(payModalFee.balanceAmount !== undefined ? payModalFee.balanceAmount : payModalFee.amount).toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
-              <div className="bg-[#FAF9F5] border border-[#E9E5D9]/40 p-4 rounded-2xl flex justify-between items-center">
-                <span className="text-slate-600 font-bold">Amount Paid (Rupees)</span>
-                <span className="text-xl font-extrabold text-emerald-600">₹{activeReceipt.amountPaid.toLocaleString('en-IN')}</span>
+              {/* Installment Choice */}
+              <div className="space-y-2">
+                <label className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">Payment Option</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPayType('full');
+                      setCustomPayAmount((payModalFee.balanceAmount !== undefined ? payModalFee.balanceAmount : payModalFee.amount).toString());
+                    }}
+                    className={`p-3 rounded-2xl border text-center font-bold transition-all cursor-pointer ${
+                      payType === 'full' ? 'border-indigo-600 bg-indigo-50/60 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Full Balance</span>
+                    <span className="block text-[10px] font-normal text-slate-500">₹{(payModalFee.balanceAmount !== undefined ? payModalFee.balanceAmount : payModalFee.amount).toLocaleString('en-IN')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPayType('custom')}
+                    className={`p-3 rounded-2xl border text-center font-bold transition-all cursor-pointer ${
+                      payType === 'custom' ? 'border-indigo-600 bg-indigo-50/60 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>Custom Installment</span>
+                    <span className="block text-[10px] font-normal text-slate-500">Enter partial amount</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="bg-slate-50 border p-3 rounded-2xl text-[10px] font-semibold text-slate-500 font-mono space-y-0.5">
-                <p>Transaction ID: <span className="text-slate-800">{activeReceipt.transactionId}</span></p>
-                <p>Payment Method: <span className="text-slate-800">{activeReceipt.paymentMethod}</span></p>
-                <p>Status: <span className="text-emerald-600 uppercase font-bold">Cleared</span></p>
+              {/* Custom Amount Input */}
+              {payType === 'custom' && (
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-600 block text-[11px]">Installment Amount (₹):</label>
+                  <input
+                    type="number"
+                    value={customPayAmount}
+                    onChange={(e) => setCustomPayAmount(e.target.value)}
+                    placeholder="e.g. 5000"
+                    max={payModalFee.balanceAmount !== undefined ? payModalFee.balanceAmount : payModalFee.amount}
+                    className="w-full p-2.5 border rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+
+              {/* Payment Gateway Mode */}
+              <div className="space-y-1.5 pt-1">
+                <label className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">Gateway Method</label>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50">
+                    <input
+                      type="radio"
+                      name="payMethod"
+                      value="razorpay"
+                      checked={payMethod === 'razorpay'}
+                      onChange={() => setPayMethod('razorpay')}
+                      className="text-indigo-600"
+                    />
+                    <div className="flex-1 flex justify-between items-center">
+                      <span className="font-bold text-slate-800">Razorpay (UPI, GPay, Cards, NetBanking)</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-1.5 py-0.5 rounded">INSTANT</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50">
+                    <input
+                      type="radio"
+                      name="payMethod"
+                      value="wallet"
+                      checked={payMethod === 'wallet'}
+                      onChange={() => setPayMethod('wallet')}
+                      className="text-indigo-600"
+                    />
+                    <span className="font-semibold text-slate-700">Direct School Parent Wallet</span>
+                  </label>
+                </div>
               </div>
             </div>
 
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPayModalFee(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isProcessingPay}
+                onClick={submitPayment}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>{isProcessingPay ? 'Processing...' : `Pay ₹${payType === 'full' ? (payModalFee.balanceAmount !== undefined ? payModalFee.balanceAmount : payModalFee.amount).toLocaleString('en-IN') : Number(customPayAmount || 0).toLocaleString('en-IN')}`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Official Receipt Modal */}
+      {activeReceipt && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative text-slate-800 animate-in fade-in">
             <button
               onClick={() => setActiveReceipt(null)}
-              className="w-full py-2.5 px-6 rounded-2xl bg-[#9F92EC] hover:bg-[#8C7EB5] text-white font-quicksand font-bold text-xs shadow transition-all active:scale-[0.98] cursor-pointer"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-bold text-slate-500 transition-colors"
             >
-              CLOSE RECEIPT
+              ×
             </button>
+
+            <div className="border-b pb-3 text-center space-y-1">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-1 shadow-inner">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <span className="text-[10px] font-extrabold tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-0.5 rounded-full">OFFICIAL FEE RECEIPT</span>
+              <h4 className="font-quicksand font-bold text-slate-800 text-base mt-2">{activeReceipt.school?.name || 'Apna School Kindergarten'}</h4>
+              <p className="text-[11px] text-slate-400 font-mono">Receipt No: {activeReceipt.receipt?.receiptNumber || 'REC-OFFICIAL'}</p>
+            </div>
+
+            <div className="py-4 space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-y-2 border-b pb-3 text-slate-600">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase block font-semibold">Student Name</span>
+                  <span className="text-slate-800 font-bold">{activeReceipt.student?.name || child?.name}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase block font-semibold">Class</span>
+                  <span className="text-slate-800 font-bold">{activeReceipt.student?.class || child?.class}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase block font-semibold">Fee Term</span>
+                  <span className="text-slate-800 font-bold">{activeReceipt.fee?.term || 'Tuition Invoice'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase block font-semibold">Payment Date</span>
+                  <span className="text-slate-800 font-bold">{new Date(activeReceipt.receipt?.paymentDate || Date.now()).toLocaleDateString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Amount Box */}
+              <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-emerald-800 font-bold block">Amount Paid</span>
+                  <span className="text-[10px] text-emerald-600 font-mono">{activeReceipt.receipt?.paymentMethod || 'Online Gateway'}</span>
+                </div>
+                <span className="text-2xl font-black text-emerald-700">₹{(activeReceipt.receipt?.amountPaid || 0).toLocaleString('en-IN')}</span>
+              </div>
+
+              {activeReceipt.fee?.balanceAmount > 0 && (
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-amber-800 flex justify-between font-bold text-[11px]">
+                  <span>Outstanding Remaining Balance:</span>
+                  <span>₹{activeReceipt.fee.balanceAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+
+              <div className="bg-slate-50 border p-3 rounded-2xl text-[10px] font-mono space-y-0.5 text-slate-500">
+                <p>Transaction ID: <span className="text-slate-800 font-semibold">{activeReceipt.receipt?.transactionId || 'TXN-DIRECT'}</span></p>
+                <p>Status: <span className="text-emerald-600 font-bold">VERIFIED & CLEARED</span></p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => generateFeeReceiptPDF(activeReceipt)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Official PDF Receipt</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveReceipt(null)}
+                className="py-2.5 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

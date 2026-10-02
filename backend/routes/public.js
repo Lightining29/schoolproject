@@ -10,6 +10,7 @@ import Event from '../models/Event.js';
 import Query from '../models/Query.js';
 import mockStore from '../config/mockStore.js';
 import { uploadAdmissions } from '../middleware/upload.js';
+import { verifyAdmissionDocumentAI } from '../config/aiVerificationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -192,6 +193,12 @@ router.post('/admissions/apply', uploadAdmissions.fields([
 
     const parsedDob = studentDetails.dateOfBirth ? new Date(studentDetails.dateOfBirth) : new Date('2022-01-01');
 
+    // Run AI Document & Age Eligibility Verification
+    const aiVerification = await verifyAdmissionDocumentAI({
+      studentDetails,
+      parentDetails
+    });
+
     if (isMock) {
       const admission = await mockStore.create('admissions', {
         _id: admissionId,
@@ -203,11 +210,12 @@ router.post('/admissions/apply', uploadAdmissions.fields([
         parentDetails,
         documents,
         documentData,
+        aiVerification,
         status: 'pending',
-        remarks: 'Online Application Received',
+        remarks: aiVerification.verified ? 'AI Verified: Age & Document Criteria Met' : 'AI Flagged: Requires Manual Age/Document Review',
         submissionDate: new Date()
       });
-      return res.status(201).json({ success: true, applicationNumber: appNo, data: admission });
+      return res.status(201).json({ success: true, applicationNumber: appNo, data: admission, aiVerification });
     }
 
     const admission = await Admission.create({
@@ -220,12 +228,28 @@ router.post('/admissions/apply', uploadAdmissions.fields([
       parentDetails,
       documents,
       documentData,
+      aiVerification,
       status: 'pending',
-      remarks: 'Online Application Received',
+      remarks: aiVerification.verified ? 'AI Verified: Age & Document Criteria Met' : 'AI Flagged: Requires Manual Age/Document Review',
       submissionDate: new Date()
     });
 
-    res.status(201).json({ success: true, applicationNumber: appNo, data: admission });
+    res.status(201).json({ success: true, applicationNumber: appNo, data: admission, aiVerification });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Live AI Document & Age Eligibility Pre-Check
+// @route   POST /api/public/admissions/ai-verify
+router.post('/admissions/ai-verify', async (req, res) => {
+  try {
+    const { studentDetails, parentDetails } = req.body;
+    const result = await verifyAdmissionDocumentAI({
+      studentDetails: studentDetails || {},
+      parentDetails: parentDetails || {}
+    });
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
