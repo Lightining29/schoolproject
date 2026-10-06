@@ -267,4 +267,101 @@ CREATE TABLE IF NOT EXISTS `queries` (
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 15. Cash Desk Transactions Table
+CREATE TABLE IF NOT EXISTS `cash_desk_transactions` (
+  `_id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `transactionId` VARCHAR(100) NOT NULL UNIQUE,
+  `date` DATE NOT NULL,
+  `time` VARCHAR(20) NOT NULL,
+  `type` ENUM('collection', 'expense', 'refund', 'adjustment') NOT NULL DEFAULT 'collection',
+  `category` VARCHAR(50) NOT NULL DEFAULT 'Monthly Fee',
+  `studentId` VARCHAR(64) NULL,
+  `studentName` VARCHAR(255) NULL,
+  `feeId` VARCHAR(64) NULL,
+  `receiptId` VARCHAR(64) NULL,
+  `paymentMethod` VARCHAR(50) NOT NULL DEFAULT 'Cash',
+  `amount` DOUBLE NOT NULL,
+  `referenceNumber` VARCHAR(100) NULL,
+  `collectedBy` VARCHAR(100) NOT NULL DEFAULT 'Admin Desk',
+  `notes` TEXT NULL,
+  `status` ENUM('completed', 'cancelled') NOT NULL DEFAULT 'completed',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_cdt_date` (`date`),
+  INDEX `idx_cdt_type` (`type`),
+  INDEX `idx_cdt_studentId` (`studentId`),
+  INDEX `idx_cdt_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 16. Cash Desk Daily Closings Table
+CREATE TABLE IF NOT EXISTS `cash_desk_closings` (
+  `_id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `closingDate` DATE NOT NULL UNIQUE,
+  `openingCash` DOUBLE NOT NULL DEFAULT 0,
+  `totalCashCollected` DOUBLE NOT NULL DEFAULT 0,
+  `totalUpiCollected` DOUBLE NOT NULL DEFAULT 0,
+  `totalCardCollected` DOUBLE NOT NULL DEFAULT 0,
+  `totalBankCollected` DOUBLE NOT NULL DEFAULT 0,
+  `totalDigitalCollected` DOUBLE NOT NULL DEFAULT 0,
+  `totalExpenses` DOUBLE NOT NULL DEFAULT 0,
+  `totalRefunds` DOUBLE NOT NULL DEFAULT 0,
+  `expectedCash` DOUBLE NOT NULL DEFAULT 0,
+  `actualCash` DOUBLE NOT NULL DEFAULT 0,
+  `discrepancy` DOUBLE NOT NULL DEFAULT 0,
+  `discrepancyReason` TEXT NULL,
+  `closedBy` VARCHAR(100) NOT NULL DEFAULT 'Admin Desk',
+  `status` ENUM('open', 'closed') NOT NULL DEFAULT 'closed',
+  `notes` TEXT NULL,
+  `closedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_cdc_date` (`closingDate`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 17. Fee Reminders & Notification Logs Table
+CREATE TABLE IF NOT EXISTS `fee_reminders` (
+  `_id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `studentId` VARCHAR(64) NOT NULL,
+  `studentName` VARCHAR(255) NOT NULL,
+  `parentName` VARCHAR(255) NULL,
+  `parentEmail` VARCHAR(255) NULL,
+  `parentPhone` VARCHAR(50) NULL,
+  `feeId` VARCHAR(64) NULL,
+  `month` VARCHAR(50) NULL,
+  `amountDue` DOUBLE NOT NULL DEFAULT 0,
+  `reminderType` ENUM('upcoming', 'due_today', 'overdue', 'custom') NOT NULL DEFAULT 'due_today',
+  `channel` ENUM('email', 'sms', 'whatsapp', 'in_app') NOT NULL DEFAULT 'in_app',
+  `message` TEXT NOT NULL,
+  `scheduledFor` DATETIME NULL,
+  `sentAt` DATETIME NULL,
+  `status` ENUM('PENDING', 'SENT', 'DELIVERED', 'FAILED') NOT NULL DEFAULT 'SENT',
+  `providerResponse` TEXT NULL,
+  `failureReason` TEXT NULL,
+  `sentBy` VARCHAR(100) NOT NULL DEFAULT 'Automated System',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_rem_studentId` (`studentId`),
+  INDEX `idx_rem_status` (`status`),
+  INDEX `idx_rem_type` (`reminderType`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 18. Audit Logs Table
+CREATE TABLE IF NOT EXISTS `audit_logs` (
+  `_id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `action` VARCHAR(100) NOT NULL,
+  `category` VARCHAR(50) NOT NULL DEFAULT 'FINANCE',
+  `performedBy` VARCHAR(100) NOT NULL DEFAULT 'Admin',
+  `performedByRole` VARCHAR(50) NOT NULL DEFAULT 'admin',
+  `targetEntity` VARCHAR(50) NOT NULL,
+  `targetId` VARCHAR(64) NULL,
+  `details` TEXT NULL,
+  `changes` JSON NULL,
+  `ipAddress` VARCHAR(50) NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_audit_action` (`action`),
+  INDEX `idx_audit_category` (`category`),
+  INDEX `idx_audit_target` (`targetEntity`, `targetId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
+

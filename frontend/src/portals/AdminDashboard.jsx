@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, ClipboardList, Users, CreditCard, Bell, Image as ImageIcon, MessageCircle, CheckCircle, XCircle, Trash2, Plus, Clock, Search, FileText, Printer, Edit, Download, Contact, Calendar, ChevronLeft, ChevronRight, Sparkles, DollarSign, LogOut, ArrowRight, Target, Zap, ShieldCheck, AlertTriangle, TrendingUp, Bot, RefreshCw, Settings, PieChart, ReceiptText, Sliders, ArrowUpRight } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Users, CreditCard, Bell, Image as ImageIcon, MessageCircle, CheckCircle, XCircle, Trash2, Plus, Clock, Search, FileText, Printer, Edit, Download, Contact, Calendar, ChevronLeft, ChevronRight, Sparkles, DollarSign, LogOut, ArrowRight, Target, Zap, ShieldCheck, AlertTriangle, TrendingUp, Bot, RefreshCw, Settings, PieChart, ReceiptText, Sliders, ArrowUpRight, Send, AlertCircle, Shield, FileSpreadsheet, Lock, ArrowDownCircle, History, Check, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import StudentIdCardModal from '../components/StudentIdCardModal.jsx';
@@ -193,6 +193,43 @@ export default function AdminDashboard() {
     remarks: ''
   });
   const [isSubmittingPayModal, setIsSubmittingPayModal] = useState(false);
+  
+  // Real Reception Cash Desk State
+  const [cashDeskData, setCashDeskData] = useState(null);
+  const [loadingCashDesk, setLoadingCashDesk] = useState(false);
+  const [cashDeskFilterDate, setCashDeskFilterDate] = useState('');
+  const [cashDeskTxnModal, setCashDeskTxnModal] = useState(false);
+  const [cashDeskTxnForm, setCashDeskTxnForm] = useState({
+    type: 'EXPENSE',
+    category: 'OFFICE_SUPPLIES',
+    amount: '',
+    paymentMethod: 'CASH',
+    description: '',
+    vendorRecipient: ''
+  });
+  const [isSubmittingCashDeskTxn, setIsSubmittingCashDeskTxn] = useState(false);
+  const [closeDeskModal, setCloseDeskModal] = useState(false);
+  const [closeDeskForm, setCloseDeskForm] = useState({
+    actualCash: '',
+    discrepancyReason: ''
+  });
+  const [isClosingDesk, setIsClosingDesk] = useState(false);
+
+  // Fee Reminders Management State
+  const [remindersData, setRemindersData] = useState({ upcoming: [], dueToday: [], overdue: [], logs: [] });
+  const [loadingReminders, setLoadingReminders] = useState(false);
+  const [dispatchChannel, setDispatchChannel] = useState('email');
+  const [dispatchType, setDispatchType] = useState('all');
+  const [isDispatchingReminders, setIsDispatchingReminders] = useState(false);
+
+  // Financial Reports Hub & Audit Trail State
+  const [financialReportType, setFinancialReportType] = useState('daily_collection');
+  const [reportDateFrom, setReportDateFrom] = useState('');
+  const [reportDateTo, setReportDateTo] = useState('');
+  const [financialReportData, setFinancialReportData] = useState(null);
+  const [loadingFinancialReport, setLoadingFinancialReport] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
@@ -746,11 +783,241 @@ export default function AdminDashboard() {
     }
   };
 
+  // Cash Desk API Handlers
+  const fetchCashDeskToday = async () => {
+    setLoadingCashDesk(true);
+    try {
+      const url = cashDeskFilterDate ? `/api/admin/cash-desk/today?date=${cashDeskFilterDate}` : '/api/admin/cash-desk/today';
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setLoadingCashDesk(false);
+      if (data.success) {
+        setCashDeskData(data);
+      }
+    } catch (err) {
+      setLoadingCashDesk(false);
+      console.error('Error fetching cash desk data:', err);
+    }
+  };
+
+  const handleRecordCashDeskTxn = async (e) => {
+    e.preventDefault();
+    if (!cashDeskTxnForm.amount || Number(cashDeskTxnForm.amount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    setIsSubmittingCashDeskTxn(true);
+    try {
+      const res = await fetch('/api/admin/cash-desk/transaction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          type: cashDeskTxnForm.type,
+          category: cashDeskTxnForm.category,
+          amount: Number(cashDeskTxnForm.amount),
+          paymentMethod: cashDeskTxnForm.paymentMethod,
+          description: cashDeskTxnForm.description,
+          vendorRecipient: cashDeskTxnForm.vendorRecipient,
+          recordedBy: 'Admin Reception Desk'
+        })
+      });
+      const data = await res.json();
+      setIsSubmittingCashDeskTxn(false);
+      if (data.success) {
+        showToast(data.message);
+        alert(data.message);
+        setCashDeskTxnModal(false);
+        setCashDeskTxnForm({
+          type: 'EXPENSE',
+          category: 'OFFICE_SUPPLIES',
+          amount: '',
+          paymentMethod: 'CASH',
+          description: '',
+          vendorRecipient: ''
+        });
+        fetchCashDeskToday();
+        fetchEnhancedFeeStats();
+      } else {
+        alert(data.message || 'Failed to record transaction');
+      }
+    } catch (err) {
+      setIsSubmittingCashDeskTxn(false);
+      console.error(err);
+      alert('Error recording transaction: ' + err.message);
+    }
+  };
+
+  const handleCloseCashDesk = async (e) => {
+    e.preventDefault();
+    if (closeDeskForm.actualCash === '') {
+      alert('Please enter the actual physical cash counted in register');
+      return;
+    }
+    const actual = Number(closeDeskForm.actualCash);
+    const expected = cashDeskData?.summary?.expectedClosingCash || 0;
+    if (actual !== expected && !closeDeskForm.discrepancyReason.trim()) {
+      alert('Variance detected! You must provide an explanation/reason for the cash discrepancy.');
+      return;
+    }
+
+    setIsClosingDesk(true);
+    try {
+      const res = await fetch('/api/admin/cash-desk/close', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          openingCash: cashDeskData?.summary?.openingCash || 5000,
+          actualCash: actual,
+          discrepancyReason: closeDeskForm.discrepancyReason,
+          closedBy: 'Admin Reception Desk',
+          date: cashDeskFilterDate || undefined
+        })
+      });
+      const data = await res.json();
+      setIsClosingDesk(false);
+      if (data.success) {
+        showToast('Daily Cash Desk closed and reconciled successfully!');
+        alert('Daily Cash Desk closed and reconciled successfully!');
+        setCloseDeskModal(false);
+        setCloseDeskForm({ actualCash: '', discrepancyReason: '' });
+        fetchCashDeskToday();
+      } else {
+        alert(data.message || 'Failed to close cash desk');
+      }
+    } catch (err) {
+      setIsClosingDesk(false);
+      console.error(err);
+      alert('Error closing cash desk: ' + err.message);
+    }
+  };
+
+  // Fee Reminders API Handlers
+  const fetchReminders = async () => {
+    setLoadingReminders(true);
+    try {
+      const res = await fetch('/api/admin/reminders', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setLoadingReminders(false);
+      if (data.success) {
+        setRemindersData(data);
+      }
+    } catch (err) {
+      setLoadingReminders(false);
+      console.error('Error fetching reminders:', err);
+    }
+  };
+
+  const handleDispatchReminders = async () => {
+    setIsDispatchingReminders(true);
+    try {
+      const res = await fetch('/api/admin/reminders/dispatch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          channel: dispatchChannel,
+          reminderType: dispatchType,
+          sentBy: 'Admin Desk Trigger'
+        })
+      });
+      const data = await res.json();
+      setIsDispatchingReminders(false);
+      if (data.success) {
+        showToast(data.message);
+        alert(data.message);
+        fetchReminders();
+      } else {
+        alert(data.message || 'Failed to dispatch reminders');
+      }
+    } catch (err) {
+      setIsDispatchingReminders(false);
+      console.error(err);
+      alert('Error dispatching reminders: ' + err.message);
+    }
+  };
+
+  // Financial Reports API Handlers
+  const fetchFinancialReport = async () => {
+    setLoadingFinancialReport(true);
+    try {
+      let queryParams = `reportType=${financialReportType}`;
+      if (reportDateFrom) queryParams += `&fromDate=${reportDateFrom}`;
+      if (reportDateTo) queryParams += `&toDate=${reportDateTo}`;
+
+      const res = await fetch(`/api/admin/fees/reports?${queryParams}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setLoadingFinancialReport(false);
+      if (data.success) {
+        setFinancialReportData(data);
+      }
+    } catch (err) {
+      setLoadingFinancialReport(false);
+      console.error('Error fetching financial report:', err);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    setLoadingAuditLogs(true);
+    try {
+      const res = await fetch('/api/admin/audit-logs', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await res.json();
+      setLoadingAuditLogs(false);
+      if (data.success) {
+        setAuditLogs(data.data || []);
+      }
+    } catch (err) {
+      setLoadingAuditLogs(false);
+      console.error('Error fetching audit logs:', err);
+    }
+  };
+
+  const handleExportReportCSV = () => {
+    if (!financialReportData || !financialReportData.rows || financialReportData.rows.length === 0) {
+      alert('No data rows available to export');
+      return;
+    }
+    const headers = Object.keys(financialReportData.rows[0]);
+    const csvContent = [
+      headers.join(','),
+      ...financialReportData.rows.map(row =>
+        headers.map(h => `"${(row[h] !== undefined && row[h] !== null ? row[h] : '').toString().replace(/"/g, '""')}"`).join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${financialReportType}_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Report CSV exported successfully!');
+  };
+
   useEffect(() => {
     fetchDashboardData();
     fetchGallery();
     fetchAiForecast();
     fetchEnhancedFeeStats();
+    fetchCashDeskToday();
+    fetchReminders();
   }, []);
 
   const fetchStats = () => {
@@ -2802,9 +3069,11 @@ export default function AdminDashboard() {
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/70">
                     {[
                       { id: 'dashboard', label: 'KPI Dashboard & Analytics', icon: LayoutDashboard },
-                      { id: 'desk', label: 'Student Cash Desk', icon: DollarSign },
+                      { id: 'desk', label: 'Reception Cash Desk', icon: DollarSign },
                       { id: 'invoices', label: 'Invoices Ledger', icon: ReceiptText },
-                      { id: 'structures', label: 'Student Structures', icon: Sliders }
+                      { id: 'structures', label: 'Student Structures', icon: Sliders },
+                      { id: 'reminders', label: 'Fee Reminders', icon: Bell },
+                      { id: 'reports', label: 'Financial Reports & Audit', icon: FileSpreadsheet }
                     ].map(tab => {
                       const Icon = tab.icon;
                       const isActive = feeSubTab === tab.id;
@@ -3234,16 +3503,133 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {/* SUBTAB 2: Student Fee Cash Desk & Balance Calculator */}
+                {/* SUBTAB 2: Reception Cash Desk & Daily Reconciliation */}
                 {feeSubTab === 'desk' && (
                   <div className="space-y-6">
-                    {/* Bento Cash Desk: Real-Time Fees & Remaining Balance */}
+                    {/* Reception Terminal Header & Shift Summary */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-sm">
+                            <DollarSign className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-quicksand font-bold text-slate-900 text-base flex items-center space-x-2">
+                              <span>Cash Desk & Cashier Reception Terminal</span>
+                              <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
+                                cashDeskData?.closing?.status === 'CLOSED'
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {cashDeskData?.closing?.status === 'CLOSED' ? 'Desk Closed Today' : 'Live / Open Desk'}
+                              </span>
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Daily cash balancing, collection breakdown by payment mode, petty cash expenses, refunds, and reconciled closing.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="date"
+                            value={cashDeskFilterDate}
+                            onChange={e => {
+                              setCashDeskFilterDate(e.target.value);
+                              setTimeout(fetchCashDeskToday, 50);
+                            }}
+                            className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl px-3 py-2 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCashDeskTxnModal(true)}
+                            className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold font-quicksand rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Expense / Refund</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCloseDeskForm({
+                                actualCash: cashDeskData?.summary?.expectedClosingCash || '',
+                                discrepancyReason: ''
+                              });
+                              setCloseDeskModal(true);
+                            }}
+                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold font-quicksand rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Reconcile & Close Cash Desk</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Cash Desk KPI Cards Row */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                        {/* Opening Cash */}
+                        <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl space-y-1">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">Opening Float</span>
+                          <span className="text-xl font-black font-quicksand text-slate-800 block">
+                            ₹{(cashDeskData?.summary?.openingCash ?? 5000).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">Start-of-day float</span>
+                        </div>
+
+                        {/* Cash Collected */}
+                        <div className="bg-emerald-50/70 border border-emerald-100 p-3.5 rounded-2xl space-y-1">
+                          <span className="text-[10px] font-bold uppercase text-emerald-600 block tracking-wider">Cash Collected</span>
+                          <span className="text-xl font-black font-quicksand text-emerald-700 block">
+                            ₹{(cashDeskData?.summary?.cashCollection ?? 0).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-emerald-600 block">Physical currency</span>
+                        </div>
+
+                        {/* UPI / Digital */}
+                        <div className="bg-purple-50/70 border border-purple-100 p-3.5 rounded-2xl space-y-1">
+                          <span className="text-[10px] font-bold uppercase text-purple-600 block tracking-wider">UPI / QR Code</span>
+                          <span className="text-xl font-black font-quicksand text-purple-700 block">
+                            ₹{(cashDeskData?.summary?.upiCollection ?? 0).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-purple-600 block">Instant gateway</span>
+                        </div>
+
+                        {/* Card & Bank */}
+                        <div className="bg-blue-50/70 border border-blue-100 p-3.5 rounded-2xl space-y-1">
+                          <span className="text-[10px] font-bold uppercase text-blue-600 block tracking-wider">POS / Card & Bank</span>
+                          <span className="text-xl font-black font-quicksand text-blue-700 block">
+                            ₹{((cashDeskData?.summary?.cardCollection ?? 0) + (cashDeskData?.summary?.bankCollection ?? 0)).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-blue-600 block">Direct settlements</span>
+                        </div>
+
+                        {/* Total Expenses / Refunds */}
+                        <div className="bg-rose-50/70 border border-rose-100 p-3.5 rounded-2xl space-y-1">
+                          <span className="text-[10px] font-bold uppercase text-rose-600 block tracking-wider">Outflows / Exp.</span>
+                          <span className="text-xl font-black font-quicksand text-rose-700 block">
+                            ₹{((cashDeskData?.summary?.totalExpenses ?? 0) + (cashDeskData?.summary?.totalRefunds ?? 0)).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-rose-600 block">Expenses & refunds</span>
+                        </div>
+
+                        {/* Expected Cash in Drawer */}
+                        <div className="bg-indigo-50 border-2 border-indigo-200 p-3.5 rounded-2xl space-y-1">
+                          <span className="text-[10px] font-bold uppercase text-indigo-700 block tracking-wider">Expected Cash Drawer</span>
+                          <span className="text-xl font-black font-quicksand text-indigo-900 block">
+                            ₹{(cashDeskData?.summary?.expectedClosingCash ?? 5000).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-indigo-700 block font-semibold">Opening + Cash - Exp</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Student Collection Terminal & Balance Calculator */}
                     <div className="bg-[#FAF9FF] border border-[#E9E4FF] rounded-3xl p-6 sm:p-7 space-y-6 shadow-sm">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-[#E9E4FF]">
                         <div>
                           <h4 className="text-lg font-bold font-quicksand text-[#18191E] flex items-center space-x-2">
                             <DollarSign className="w-5 h-5 text-[#5B4DF5]" />
-                            <span>Student Fee Cash Collection & Balance Desk</span>
+                            <span>Quick Student Cash Collection & Receipt Issuance</span>
                           </h4>
                           <p className="text-xs text-slate-500 mt-0.5 font-medium">
                             Search any student to calculate their Total Fees, Paid Amount, and Remaining Balance Due, then record instant cash payments.
@@ -3472,6 +3858,83 @@ export default function AdminDashboard() {
                           </form>
                         </div>
                       )}
+                    </div>
+
+                    {/* Today's Cash Desk Ledger Log Table */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center space-x-2">
+                          <History className="w-4 h-4 text-slate-700" />
+                          <h4 className="font-quicksand font-bold text-slate-800 text-sm">
+                            Today's Reception Cash Desk Ledger ({cashDeskData?.transactions?.length || 0} Entries)
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={fetchCashDeskToday}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-1"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingCashDesk ? 'animate-spin' : ''}`} />
+                          <span>Refresh Desk Ledger</span>
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                              <th className="p-3">Ref ID</th>
+                              <th className="p-3">Time</th>
+                              <th className="p-3">Type</th>
+                              <th className="p-3">Particulars / Recipient</th>
+                              <th className="p-3">Mode</th>
+                              <th className="p-3 text-right">Inflow (+)</th>
+                              <th className="p-3 text-right">Outflow (-)</th>
+                              <th className="p-3">Cashier</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                            {(!cashDeskData?.transactions || cashDeskData.transactions.length === 0) ? (
+                              <tr>
+                                <td colSpan="8" className="p-6 text-center text-slate-400 font-bold">
+                                  No cash desk entries recorded for this date.
+                                </td>
+                              </tr>
+                            ) : (
+                              cashDeskData.transactions.map((txn, tIdx) => {
+                                const isInflow = txn.type === 'FEE_COLLECTION' || txn.type === 'OTHER_INCOME';
+                                return (
+                                  <tr key={tIdx} className="hover:bg-slate-50/50">
+                                    <td className="p-3 font-mono font-bold text-slate-600 text-[11px]">{txn.referenceNumber || txn._id}</td>
+                                    <td className="p-3 text-slate-500">{new Date(txn.createdAt || txn.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                    <td className="p-3">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                        isInflow
+                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                          : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                      }`}>
+                                        {txn.type}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 font-semibold text-slate-800">
+                                      {txn.description}
+                                      {txn.vendorRecipient && <span className="block text-[10px] text-slate-400">To: {txn.vendorRecipient}</span>}
+                                    </td>
+                                    <td className="p-3 font-mono text-[11px] font-bold text-slate-600">{txn.paymentMethod}</td>
+                                    <td className="p-3 text-right font-mono font-black text-emerald-700">
+                                      {isInflow ? `+₹${Number(txn.amount).toLocaleString('en-IN')}` : '-'}
+                                    </td>
+                                    <td className="p-3 text-right font-mono font-black text-rose-600">
+                                      {!isInflow ? `-₹${Number(txn.amount).toLocaleString('en-IN')}` : '-'}
+                                    </td>
+                                    <td className="p-3 text-slate-500 text-[11px]">{txn.recordedBy}</td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -3885,6 +4348,449 @@ export default function AdminDashboard() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB 5: Automated Fee Reminders & Multi-Channel Dispatch */}
+                {feeSubTab === 'reminders' && (
+                  <div className="space-y-6">
+                    {/* Control Banner & Quick Dispatch */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-black shadow-sm">
+                            <Bell className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-quicksand font-bold text-slate-900 text-base">
+                              Automated Fee Reminders & Multi-Channel Dispatch Center
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Deliver automated payment notices for Upcoming (7-day & 3-day), Due Today, and Overdue fees across Email, SMS, WhatsApp & Parent App.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={fetchReminders}
+                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold font-quicksand rounded-xl transition-all cursor-pointer flex items-center space-x-1.5"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${loadingReminders ? 'animate-spin' : ''}`} />
+                            <span>Scan Dues</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Reminder Metric Buckets */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-quicksand">
+                        {/* Upcoming Due Bucket */}
+                        <div className="bg-sky-50/70 border border-sky-100 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-sky-700 font-bold">
+                            <span className="text-[10px] uppercase tracking-wider">Upcoming Dues (Next 7 Days)</span>
+                            <Clock className="w-4 h-4" />
+                          </div>
+                          <span className="text-2xl font-black text-sky-900 block">
+                            {remindersData?.upcoming?.length || 0}
+                          </span>
+                          <span className="text-[10px] text-sky-600 block">Gentle early reminder notices</span>
+                        </div>
+
+                        {/* Due Today Bucket */}
+                        <div className="bg-amber-50/70 border border-amber-100 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-amber-700 font-bold">
+                            <span className="text-[10px] uppercase tracking-wider">Due Today (Cutoff Deadline)</span>
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                          <span className="text-2xl font-black text-amber-900 block">
+                            {remindersData?.dueToday?.length || 0}
+                          </span>
+                          <span className="text-[10px] text-amber-600 block">Last day before late fine trigger</span>
+                        </div>
+
+                        {/* Overdue Bucket */}
+                        <div className="bg-rose-50/70 border border-rose-100 p-4 rounded-2xl space-y-1">
+                          <div className="flex items-center justify-between text-rose-700 font-bold">
+                            <span className="text-[10px] uppercase tracking-wider">Overdue Defaulters</span>
+                            <AlertTriangle className="w-4 h-4" />
+                          </div>
+                          <span className="text-2xl font-black text-rose-900 block">
+                            {remindersData?.overdue?.length || 0}
+                          </span>
+                          <span className="text-[10px] text-rose-600 block">Immediate follow-up / Escalation</span>
+                        </div>
+                      </div>
+
+                      {/* Multi-Channel Dispatch Trigger Form */}
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                        <h5 className="font-quicksand font-bold text-slate-800 text-xs flex items-center space-x-2">
+                          <Send className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Dispatch Instant Automated Notifications</span>
+                        </h5>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-semibold">
+                          <div className="space-y-1">
+                            <label className="text-slate-600 font-bold">Target Group</label>
+                            <select
+                              value={dispatchType}
+                              onChange={e => setDispatchType(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                            >
+                              <option value="all">All Groups (Upcoming + Due Today + Overdue)</option>
+                              <option value="overdue">Overdue Defaulters Only</option>
+                              <option value="due_today">Due Today Only</option>
+                              <option value="upcoming_3d">Upcoming (Due in 3 Days)</option>
+                              <option value="upcoming_7d">Upcoming (Due in 7 Days)</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-slate-600 font-bold">Delivery Channel</label>
+                            <select
+                              value={dispatchChannel}
+                              onChange={e => setDispatchChannel(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                            >
+                              <option value="email">Email Notification Gateway</option>
+                              <option value="sms">SMS Text Alert</option>
+                              <option value="whatsapp">WhatsApp Business API</option>
+                              <option value="app_notification">Parent Portal In-App Notification</option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-end">
+                            <button
+                              type="button"
+                              disabled={isDispatchingReminders}
+                              onClick={handleDispatchReminders}
+                              className="w-full bg-black hover:bg-slate-800 text-white font-quicksand font-bold text-xs py-2.5 px-4 rounded-xl shadow-md cursor-pointer transition-all active:scale-95 flex items-center justify-center space-x-2 disabled:opacity-50"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>{isDispatchingReminders ? 'DISPATCHING NOTICES...' : 'DISPATCH BATCH REMINDERS'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pending Dues Queue & Sent Logs Table */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Left: Overdue Students Queue */}
+                      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <h4 className="font-quicksand font-bold text-slate-800 text-sm flex items-center space-x-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-600" />
+                            <span>Actionable Overdue Queue ({remindersData?.overdue?.length || 0})</span>
+                          </h4>
+                          <span className="text-[10px] font-mono bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-bold">
+                            Requires Follow-up
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                          <table className="w-full text-xs text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
+                                <th className="p-2.5">Student</th>
+                                <th className="p-2.5">Parent Contact</th>
+                                <th className="p-2.5 text-right">Overdue (₹)</th>
+                                <th className="p-2.5 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                              {(!remindersData?.overdue || remindersData.overdue.length === 0) ? (
+                                <tr>
+                                  <td colSpan="4" className="p-6 text-center text-slate-400 font-bold">
+                                    No overdue defaulters! All accounts are up-to-date.
+                                  </td>
+                                </tr>
+                              ) : (
+                                remindersData.overdue.map((item, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                    <td className="p-2.5">
+                                      <span className="font-bold text-slate-900 block">{item.student?.name}</span>
+                                      <span className="text-[10px] text-slate-400">{item.student?.class}</span>
+                                    </td>
+                                    <td className="p-2.5 text-[11px]">
+                                      <span className="block text-slate-800">{item.parentPhone || 'No Phone'}</span>
+                                      <span className="text-[10px] text-slate-400">{item.parentEmail}</span>
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-black text-rose-600">
+                                      ₹{Number(item.dueAmount).toLocaleString('en-IN')}
+                                    </td>
+                                    <td className="p-2.5 text-right">
+                                      <button
+                                        type="button"
+                                        onClick={() => openUniversalPayModal(item.student, item.fee)}
+                                        className="px-2.5 py-1 bg-black text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-800"
+                                      >
+                                        Collect
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Right: Sent Reminders Delivery Log */}
+                      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <h4 className="font-quicksand font-bold text-slate-800 text-sm flex items-center space-x-2">
+                            <History className="w-4 h-4 text-slate-700" />
+                            <span>Recent Reminder Delivery Log ({remindersData?.logs?.length || 0})</span>
+                          </h4>
+                          <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                            Live Audit
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                          <table className="w-full text-xs text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
+                                <th className="p-2.5">Recipient</th>
+                                <th className="p-2.5">Channel</th>
+                                <th className="p-2.5">Status</th>
+                                <th className="p-2.5">Timestamp</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                              {(!remindersData?.logs || remindersData.logs.length === 0) ? (
+                                <tr>
+                                  <td colSpan="4" className="p-6 text-center text-slate-400 font-bold">
+                                    No reminder notices sent yet.
+                                  </td>
+                                </tr>
+                              ) : (
+                                remindersData.logs.map((log, lIdx) => (
+                                  <tr key={lIdx} className="hover:bg-slate-50/50">
+                                    <td className="p-2.5">
+                                      <span className="font-bold text-slate-900 block">{log.studentName}</span>
+                                      <span className="text-[10px] text-slate-400">{log.parentPhone || log.parentEmail}</span>
+                                    </td>
+                                    <td className="p-2.5 font-mono text-[10px] uppercase font-bold text-purple-700">
+                                      {log.channel}
+                                    </td>
+                                    <td className="p-2.5">
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        {log.status}
+                                      </span>
+                                    </td>
+                                    <td className="p-2.5 text-slate-400 text-[10px] font-mono">
+                                      {new Date(log.sentAt || log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB 6: Financial Reports Hub & Comprehensive Audit Trail */}
+                {feeSubTab === 'reports' && (
+                  <div className="space-y-6">
+                    {/* Report Generator Controls */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-sm">
+                            <FileSpreadsheet className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-quicksand font-bold text-slate-900 text-base">
+                              Financial Reports Hub & Audit Trail
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Generate enterprise financial ledgers (Daily, Monthly, Student Ledger, Overdue, Cash Desk) with Print, PDF, and CSV export.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={fetchFinancialReport}
+                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold font-quicksand rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${loadingFinancialReport ? 'animate-spin' : ''}`} />
+                            <span>Run Report</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleExportReportCSV}
+                            className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold font-quicksand rounded-xl shadow-sm transition-all cursor-pointer flex items-center space-x-1.5"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Export CSV</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => window.print()}
+                            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold font-quicksand rounded-xl transition-all cursor-pointer flex items-center space-x-1.5"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Print Report</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Filter Controls Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-semibold">
+                        <div className="space-y-1">
+                          <label className="text-slate-600 font-bold">Select Report Type</label>
+                          <select
+                            value={financialReportType}
+                            onChange={e => setFinancialReportType(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                          >
+                            <option value="daily_collection">Daily Collection Report</option>
+                            <option value="overdue_ledger">Overdue & Defaulters Ledger</option>
+                            <option value="cash_desk_ledger">Cash Desk & Reception Ledger</option>
+                            <option value="student_ledger">Master Student Fee Balance Ledger</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-slate-600 font-bold">From Date</label>
+                          <input
+                            type="date"
+                            value={reportDateFrom}
+                            onChange={e => setReportDateFrom(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-slate-600 font-bold">To Date</label>
+                          <input
+                            type="date"
+                            value={reportDateTo}
+                            onChange={e => setReportDateTo(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Report Output Display Table */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <h4 className="font-quicksand font-bold text-slate-800 text-sm">
+                            {financialReportData?.title || 'Financial Report Preview'}
+                          </h4>
+                          <span className="text-[11px] text-slate-400">
+                            Total Records: {financialReportData?.count || 0}
+                          </span>
+                        </div>
+                        {financialReportData?.totalAmount !== undefined && (
+                          <div className="bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+                            <span className="text-[10px] text-emerald-600 font-bold uppercase block">Report Sum</span>
+                            <span className="text-base font-black font-quicksand text-emerald-800">
+                              ₹{Number(financialReportData.totalAmount).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                        <table className="w-full text-xs text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                              {financialReportData?.rows && financialReportData.rows.length > 0 ? (
+                                Object.keys(financialReportData.rows[0]).map((h, hIdx) => (
+                                  <th key={hIdx} className="p-3">{h}</th>
+                                ))
+                              ) : (
+                                <th className="p-3">Report Details</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                            {(!financialReportData?.rows || financialReportData.rows.length === 0) ? (
+                              <tr>
+                                <td colSpan="8" className="p-8 text-center text-slate-400 font-bold">
+                                  Click "Run Report" to query financial database records.
+                                </td>
+                              </tr>
+                            ) : (
+                              financialReportData.rows.map((row, rIdx) => (
+                                <tr key={rIdx} className="hover:bg-slate-50/50">
+                                  {Object.values(row).map((val, cIdx) => (
+                                    <td key={cIdx} className="p-3 font-semibold text-slate-800">
+                                      {typeof val === 'number' ? `₹${val.toLocaleString('en-IN')}` : String(val ?? '')}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Financial Security & Audit Trail Section */}
+                    <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center space-x-2">
+                          <Shield className="w-4 h-4 text-purple-600" />
+                          <h4 className="font-quicksand font-bold text-slate-800 text-sm">
+                            Permanent Financial Audit Trail & Security Logs
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={fetchAuditLogs}
+                          className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center space-x-1"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? 'animate-spin' : ''}`} />
+                          <span>Load Security Audit Logs</span>
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                        <table className="w-full text-xs text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
+                              <th className="p-2.5">Action</th>
+                              <th className="p-2.5">Module</th>
+                              <th className="p-2.5">Description</th>
+                              <th className="p-2.5">Performed By</th>
+                              <th className="p-2.5">Timestamp</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                            {auditLogs.length === 0 ? (
+                              <tr>
+                                <td colSpan="5" className="p-6 text-center text-slate-400 font-bold">
+                                  Click "Load Security Audit Logs" to view recorded audit entries.
+                                </td>
+                              </tr>
+                            ) : (
+                              auditLogs.map((log, lIdx) => (
+                                <tr key={lIdx} className="hover:bg-slate-50/50">
+                                  <td className="p-2.5 font-bold font-mono text-[10px] text-purple-700">{log.action}</td>
+                                  <td className="p-2.5 text-[10px] font-bold text-slate-500">{log.module}</td>
+                                  <td className="p-2.5 font-semibold text-slate-800">{log.details}</td>
+                                  <td className="p-2.5 font-medium text-slate-600 text-[11px]">{log.performedBy}</td>
+                                  <td className="p-2.5 text-slate-400 font-mono text-[10px]">
+                                    {new Date(log.createdAt).toLocaleString()}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -5935,6 +6841,262 @@ export default function AdminDashboard() {
                       <span>Record Payment & Issue Slip</span>
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 4: CASH DESK EXPENSE & PETTY CASH / REFUND MODAL
+         ========================================================================= */}
+      {cashDeskTxnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold font-quicksand text-slate-800">
+                  Record Petty Cash Outflow / Expense / Refund
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Entries immediately affect your physical drawer balance.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCashDeskTxnModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordCashDeskTxn} className="space-y-4 text-xs font-semibold">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-600 font-bold">Transaction Type</label>
+                  <select
+                    value={cashDeskTxnForm.type}
+                    onChange={e => setCashDeskTxnForm(prev => ({ ...prev, type: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                  >
+                    <option value="EXPENSE">Petty Cash Expense</option>
+                    <option value="REFUND">Fee Refund to Parent</option>
+                    <option value="OTHER_INCOME">Other Miscellaneous Income</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-600 font-bold">Category</label>
+                  <select
+                    value={cashDeskTxnForm.category}
+                    onChange={e => setCashDeskTxnForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                  >
+                    <option value="OFFICE_SUPPLIES">Office / Stationery Supplies</option>
+                    <option value="REFUND">Fee Refund</option>
+                    <option value="REFRESHMENTS">Tea / Staff Refreshments</option>
+                    <option value="MAINTENANCE">Facility / Cleaning Maintenance</option>
+                    <option value="TRANSPORT">Courier / Transport Fare</option>
+                    <option value="MISCELLANEOUS">Miscellaneous Operational</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-600 font-bold">Amount (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="e.g. 350"
+                    value={cashDeskTxnForm.amount}
+                    onChange={e => setCashDeskTxnForm(prev => ({ ...prev, amount: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-extrabold text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-600 font-bold">Payment Method</label>
+                  <select
+                    value={cashDeskTxnForm.paymentMethod}
+                    onChange={e => setCashDeskTxnForm(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-slate-700"
+                  >
+                    <option value="CASH">Physical Cash Drawer</option>
+                    <option value="UPI">UPI / Digital Wallet</option>
+                    <option value="BANK">Bank Account / Cheque</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-600 font-bold">Vendor / Recipient Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Local Stationery Store, Sharma Ji"
+                  value={cashDeskTxnForm.vendorRecipient}
+                  onChange={e => setCashDeskTxnForm(prev => ({ ...prev, vendorRecipient: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-600 font-bold">Description / Purpose</label>
+                <textarea
+                  rows="2"
+                  placeholder="Reason for expenditure or fee refund particulars..."
+                  value={cashDeskTxnForm.description}
+                  onChange={e => setCashDeskTxnForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-slate-800 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCashDeskTxnModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCashDeskTxn}
+                  className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-md hover:bg-black transition-all cursor-pointer flex items-center space-x-1.5 disabled:opacity-50"
+                >
+                  {isSubmittingCashDeskTxn ? 'Recording...' : 'Record Transaction'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 5: DAILY CASH DESK CLOSING & RECONCILIATION MODAL
+         ========================================================================= */}
+      {closeDeskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold font-quicksand text-slate-800">
+                    Reconcile & Close Daily Cash Desk
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    End-of-day register balancing and official audit signoff.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCloseDeskModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Calculations Breakdown */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span>Opening Cash Float:</span>
+                <span className="font-mono font-bold">₹{(cashDeskData?.summary?.openingCash ?? 5000).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span>Cash Received (+):</span>
+                <span className="font-mono font-bold">+₹{(cashDeskData?.summary?.cashCollection ?? 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between text-rose-600">
+                <span>Petty Cash Expenses & Refunds (-):</span>
+                <span className="font-mono font-bold">-₹{((cashDeskData?.summary?.totalExpenses ?? 0) + (cashDeskData?.summary?.totalRefunds ?? 0)).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="pt-2 border-t border-slate-200 flex justify-between font-black text-slate-900 text-sm">
+                <span>Expected System Closing Cash:</span>
+                <span className="font-mono text-indigo-700">₹{(cashDeskData?.summary?.expectedClosingCash ?? 5000).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleCloseCashDesk} className="space-y-4 text-xs font-semibold">
+              <div className="space-y-1">
+                <label className="text-slate-700 font-bold">
+                  Physical Cash Counted in Drawer (₹) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  placeholder="Enter physical cash count"
+                  value={closeDeskForm.actualCash}
+                  onChange={e => setCloseDeskForm(prev => ({ ...prev, actualCash: e.target.value }))}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-black text-base text-slate-900"
+                />
+              </div>
+
+              {/* Real-time Variance Indicator */}
+              {closeDeskForm.actualCash !== '' && (
+                <div className={`p-3 rounded-xl border text-xs font-bold ${
+                  Number(closeDeskForm.actualCash) === (cashDeskData?.summary?.expectedClosingCash ?? 5000)
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <span>Cash Register Variance:</span>
+                    <span className="font-mono text-sm font-black">
+                      {Number(closeDeskForm.actualCash) - (cashDeskData?.summary?.expectedClosingCash ?? 5000) >= 0 ? '+' : ''}
+                      ₹{(Number(closeDeskForm.actualCash) - (cashDeskData?.summary?.expectedClosingCash ?? 5000)).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  {Number(closeDeskForm.actualCash) === (cashDeskData?.summary?.expectedClosingCash ?? 5000) ? (
+                    <p className="text-[10px] text-emerald-600 mt-1 font-semibold">
+                      ✓ Perfect Match! Physical drawer matches system calculations exactly.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-amber-700 mt-1 font-semibold">
+                      ⚠ Discrepancy detected. You must document an explanation below for institutional audit compliance.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Mandatory Discrepancy Reason if variance occurs */}
+              {closeDeskForm.actualCash !== '' && Number(closeDeskForm.actualCash) !== (cashDeskData?.summary?.expectedClosingCash ?? 5000) && (
+                <div className="space-y-1">
+                  <label className="text-rose-700 font-bold">
+                    Mandatory Discrepancy Reason / Note *
+                  </label>
+                  <textarea
+                    rows="2"
+                    required
+                    placeholder="Explain shortage/excess reason (e.g. pending vendor change return, coin roundoff)..."
+                    value={closeDeskForm.discrepancyReason}
+                    onChange={e => setCloseDeskForm(prev => ({ ...prev, discrepancyReason: e.target.value }))}
+                    className="w-full bg-rose-50/50 border border-rose-200 rounded-xl p-2.5 outline-none text-slate-800 resize-none font-medium"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCloseDeskModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isClosingDesk}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-md hover:bg-emerald-700 transition-all cursor-pointer flex items-center space-x-1.5 disabled:opacity-50"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{isClosingDesk ? 'Reconciling & Closing...' : 'Confirm Closing & Reconcile'}</span>
                 </button>
               </div>
             </form>

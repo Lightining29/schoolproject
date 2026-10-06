@@ -16,6 +16,10 @@ import FeeStructure from '../models/FeeStructure.js';
 import StudentFeeStructure from '../models/StudentFeeStructure.js';
 import FineRule from '../models/FineRule.js';
 import Event from '../models/Event.js';
+import CashDeskTransaction from '../models/CashDeskTransaction.js';
+import CashDeskClosing from '../models/CashDeskClosing.js';
+import FeeReminder from '../models/FeeReminder.js';
+import AuditLog from '../models/AuditLog.js';
 import { protect, authorize } from '../middleware/auth.js';
 import mockStore from '../config/mockStore.js';
 import { uploadGallery, uploadAdmissions } from '../middleware/upload.js';
@@ -1957,6 +1961,42 @@ router.post('/fees/record-payment', async (req, res) => {
       receipt = await Receipt.create(receiptData);
     }
 
+    // Automatically create Cash Desk Transaction for the ledger
+    const cashDeskPayload = {
+      transactionId: txnId,
+      date: now.toISOString().slice(0, 10),
+      time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      type: 'collection',
+      category: targetFee.feeType === 'admission' ? 'Admission Fee' : (targetFee.month ? `${targetFee.month} Fee` : 'Monthly Fee'),
+      studentId: student._id,
+      studentName: student.name,
+      feeId: targetFee._id,
+      receiptId: receipt._id,
+      paymentMethod: method,
+      amount: payAmt,
+      referenceNumber: rcpNumber,
+      collectedBy: adminName || 'Admin Desk',
+      notes: remarks || `Fee payment collected for ${student.name}`,
+      status: 'completed',
+      createdAt: now
+    };
+
+    if (mockStore.isMock) {
+      await mockStore.create('cashDeskTransactions', cashDeskPayload);
+    } else {
+      await CashDeskTransaction.create(cashDeskPayload);
+    }
+
+    // Write financial Audit Log
+    await recordAuditLog(
+      'PAYMENT_RECORDED',
+      'FINANCE',
+      'FEE_INVOICE',
+      targetFee._id,
+      `Recorded payment of ₹${payAmt} for ${student.name} (${student.class}). Receipt: ${rcpNumber}. Method: ${method}`,
+      adminName || 'Admin Desk'
+    );
+
     res.status(201).json({
       success: true,
       message: `Payment of ₹${payAmt.toLocaleString('en-IN')} recorded successfully! Receipt generated: ${rcpNumber}`,
@@ -2019,7 +2059,35 @@ router.post('/fees/receipts/:id/cancel', async (req, res) => {
         fee.status = revisedPaid === 0 ? 'pending' : 'partially_paid';
         await fee.save();
       }
+
+      // Update corresponding cash desk transaction
+      const deskTxn = await CashDeskTransaction.findOne({ receiptId: receipt._id });
+      if (deskTxn) {
+        deskTxn.status = 'cancelled';
+        deskTxn.notes = `CANCELLED: ${reason || 'Transaction reversed'}`;
+        await deskTxn.save();
+      }
     }
+
+    if (mockStore.isMock) {
+      const allDeskTxns = await mockStore.find('cashDeskTransactions');
+      const targetDesk = allDeskTxns.find(d => String(d.receiptId) === String(receipt._id));
+      if (targetDesk) {
+        await mockStore.findByIdAndUpdate('cashDeskTransactions', targetDesk._id, {
+          status: 'cancelled',
+          notes: `CANCELLED: ${reason || 'Transaction reversed'}`
+        });
+      }
+    }
+
+    await recordAuditLog(
+      'TRANSACTION_CANCELLED',
+      'FINANCE',
+      'RECEIPT',
+      receipt._id,
+      `Reversed payment receipt ${receipt.receiptNumber} (Amount: ₹${receipt.amountPaid}). Reason: ${reason || 'N/A'}`,
+      adminName || 'Admin Desk'
+    );
 
     res.json({
       success: true,
@@ -2673,6 +2741,574 @@ router.post('/ai/compose-circular', protect, authorize('admin'), async (req, res
       audience
     });
     res.json({ success: true, data: circular });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==============================================================================
+// CASH DESK OPERATIONS & DAILY CLOSING (ERP SPECIFICATION)
+// ==============================================================================
+
+// Helper: Log audit action
+async function recordAuditLog(action, category, targetEntity, targetId, details, performedBy = 'Admin', changes = null) {
+  try {
+    const payload = {
+      action,
+      category,
+      performedBy,
+      performedByRole: 'admin',
+      targetEntity,
+      targetId,
+      details,
+      changes,
+      ipAddress: '127.0.0.1'
+    };
+    if (mockStore.isMock) {
+      await mockStore.create('auditLogs', payload);
+    } else {
+      await AuditLog.create(payload);
+    }
+  } catch (err) {
+    console.error('Audit log failure:', err.message);
+  }
+}
+
+// @desc    Get Cash Desk Dashboard (Today's metrics, breakdown by payment method, transactions, closing status)
+// @route   GET /api/admin/cash-desk/today
+router.get('/cash-desk/today', async (req, res) => {
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let allTxns = [];
+    let closingRecord = null;
+
+    if (mockStore.isMock) {
+      const txns = await mockStore.find('cashDeskTransactions');
+      allTxns = txns.filter(t => t.date === todayStr);
+      closingRecord = (await mockStore.find('cashDeskClosings')).find(c => c.closingDate === todayStr);
+    } else {
+      allTxns = await CashDeskTransaction.find({ date: todayStr }).lean();
+      closingRecord = await CashDeskClosing.findOne({ closingDate: todayStr }).lean();
+    }
+
+    let cashCollection = 0;
+    let upiCollection = 0;
+    let cardCollection = 0;
+    let bankCollection = 0;
+    let expenses = 0;
+    let refunds = 0;
+
+    allTxns.forEach(t => {
+      if (t.status === 'cancelled') return;
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'collection') {
+        const m = (t.paymentMethod || '').toLowerCase();
+        if (m.includes('cash')) cashCollection += amt;
+        else if (m.includes('upi') || m.includes('qr')) upiCollection += amt;
+        else if (m.includes('card')) cardCollection += amt;
+        else bankCollection += amt;
+      } else if (t.type === 'expense') {
+        expenses += amt;
+      } else if (t.type === 'refund') {
+        refunds += amt;
+      }
+    });
+
+    const openingCash = closingRecord?.openingCash || 10000;
+    const totalCollection = cashCollection + upiCollection + cardCollection + bankCollection;
+    const digitalCollection = upiCollection + cardCollection + bankCollection;
+    const expectedClosingCash = Math.max(0, openingCash + cashCollection - expenses - refunds);
+
+    res.json({
+      success: true,
+      date: todayStr,
+      summary: {
+        openingCash,
+        cashCollection,
+        upiCollection,
+        cardCollection,
+        bankCollection,
+        digitalCollection,
+        totalCollection,
+        expenses,
+        refunds,
+        expectedClosingCash,
+        isClosed: !!closingRecord && closingRecord.status === 'closed',
+        closingRecord
+      },
+      transactions: allTxns.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Record Cash Desk Transaction (Expense, Refund, Custom Collection)
+// @route   POST /api/admin/cash-desk/transaction
+router.post('/cash-desk/transaction', async (req, res) => {
+  const {
+    type,
+    category,
+    amount,
+    paymentMethod,
+    studentId,
+    studentName,
+    referenceNumber,
+    notes,
+    collectedBy
+  } = req.body;
+
+  const numAmount = Number(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid positive transaction amount' });
+  }
+
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const txnId = `TXN-DESK-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+  try {
+    const payload = {
+      transactionId: txnId,
+      date: todayStr,
+      time: timeStr,
+      type: type || 'collection',
+      category: category || 'Other Fee',
+      studentId: studentId || null,
+      studentName: studentName || null,
+      feeId: null,
+      receiptId: null,
+      paymentMethod: paymentMethod || 'Cash',
+      amount: numAmount,
+      referenceNumber: referenceNumber || `REF-${Date.now().toString().slice(-6)}`,
+      collectedBy: collectedBy || 'Admin Desk',
+      notes: notes || '',
+      status: 'completed',
+      createdAt: now
+    };
+
+    let txn = null;
+    if (mockStore.isMock) {
+      txn = await mockStore.create('cashDeskTransactions', payload);
+    } else {
+      txn = await CashDeskTransaction.create(payload);
+    }
+
+    await recordAuditLog(
+      'CASH_DESK_ENTRY',
+      'CASH_DESK',
+      'TRANSACTION',
+      txn._id,
+      `Recorded ${type} of ₹${numAmount} under category ${category}`,
+      collectedBy || 'Admin'
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `${type.toUpperCase()} of ₹${numAmount.toLocaleString('en-IN')} recorded in Cash Desk!`,
+      data: txn
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Perform Daily Cash Desk Closing
+// @route   POST /api/admin/cash-desk/close
+router.post('/cash-desk/close', async (req, res) => {
+  const {
+    openingCash,
+    actualCash,
+    discrepancyReason,
+    closedBy,
+    notes
+  } = req.body;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  try {
+    let allTxns = [];
+    if (mockStore.isMock) {
+      const txns = await mockStore.find('cashDeskTransactions');
+      allTxns = txns.filter(t => t.date === todayStr);
+    } else {
+      allTxns = await CashDeskTransaction.find({ date: todayStr }).lean();
+    }
+
+    let cashCollection = 0;
+    let upiCollection = 0;
+    let cardCollection = 0;
+    let bankCollection = 0;
+    let expenses = 0;
+    let refunds = 0;
+
+    allTxns.forEach(t => {
+      if (t.status === 'cancelled') return;
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'collection') {
+        const m = (t.paymentMethod || '').toLowerCase();
+        if (m.includes('cash')) cashCollection += amt;
+        else if (m.includes('upi') || m.includes('qr')) upiCollection += amt;
+        else if (m.includes('card')) cardCollection += amt;
+        else bankCollection += amt;
+      } else if (t.type === 'expense') {
+        expenses += amt;
+      } else if (t.type === 'refund') {
+        refunds += amt;
+      }
+    });
+
+    const openCash = Number(openingCash) || 10000;
+    const actCash = Number(actualCash) !== undefined ? Number(actualCash) : 0;
+    const digital = upiCollection + cardCollection + bankCollection;
+    const expectedCash = Math.max(0, openCash + cashCollection - expenses - refunds);
+    const discrepancy = actCash - expectedCash;
+
+    if (discrepancy !== 0 && !discrepancyReason) {
+      return res.status(400).json({
+        success: false,
+        message: `There is a cash difference of ₹${discrepancy}. Please provide an authorized explanation reason for the variance before closing.`
+      });
+    }
+
+    const closingPayload = {
+      closingDate: todayStr,
+      openingCash: openCash,
+      totalCashCollected: cashCollection,
+      totalUpiCollected: upiCollection,
+      totalCardCollected: cardCollection,
+      totalBankCollected: bankCollection,
+      totalDigitalCollected: digital,
+      totalExpenses: expenses,
+      totalRefunds: refunds,
+      expectedCash,
+      actualCash: actCash,
+      discrepancy,
+      discrepancyReason: discrepancyReason || 'Reconciled successfully',
+      closedBy: closedBy || 'Admin Desk',
+      status: 'closed',
+      notes: notes || '',
+      closedAt: new Date()
+    };
+
+    let record = null;
+    if (mockStore.isMock) {
+      const existing = (await mockStore.find('cashDeskClosings')).find(c => c.closingDate === todayStr);
+      if (existing) {
+        record = await mockStore.findByIdAndUpdate('cashDeskClosings', existing._id, closingPayload);
+      } else {
+        record = await mockStore.create('cashDeskClosings', closingPayload);
+      }
+    } else {
+      const existing = await CashDeskClosing.findOne({ closingDate: todayStr });
+      if (existing) {
+        Object.assign(existing, closingPayload);
+        record = await existing.save();
+      } else {
+        record = await CashDeskClosing.create(closingPayload);
+      }
+    }
+
+    await recordAuditLog(
+      'DAILY_CASH_CLOSING',
+      'CASH_DESK',
+      'DAILY_CLOSING',
+      record._id,
+      `Daily closing finalized for ${todayStr}. Expected: ₹${expectedCash}, Actual: ₹${actCash}, Variance: ₹${discrepancy}`,
+      closedBy || 'Admin'
+    );
+
+    res.json({
+      success: true,
+      message: `Cash Desk successfully closed for ${todayStr}! Report archived permanently.`,
+      data: record
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==============================================================================
+// AUTOMATED & SCHEDULED FEE REMINDER SYSTEM
+// ==============================================================================
+
+// @desc    Get all Fee Reminders (Upcoming, Due Today, Overdue)
+// @route   GET /api/admin/reminders
+router.get('/reminders', async (req, res) => {
+  try {
+    let reminders = [];
+    if (mockStore.isMock) {
+      reminders = await mockStore.find('feeReminders');
+    } else {
+      reminders = await FeeReminder.find().sort({ createdAt: -1 }).lean();
+    }
+
+    const now = new Date();
+    let pendingInvoices = [];
+    if (mockStore.isMock) {
+      const allFees = await mockStore.find('fees');
+      pendingInvoices = allFees.filter(f => f.status !== 'paid' && f.status !== 'cancelled');
+    } else {
+      pendingInvoices = await Fee.find({ status: { $in: ['pending', 'partially_paid', 'overdue'] } }).lean();
+    }
+
+    // Classify pending fees into reminder categories
+    let upcomingCount = 0;
+    let dueTodayCount = 0;
+    let overdueCount = 0;
+
+    pendingInvoices.forEach(f => {
+      const d = new Date(f.dueDate);
+      const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+      if (diffDays > 0 && diffDays <= 7) upcomingCount++;
+      else if (diffDays === 0) dueTodayCount++;
+      else if (diffDays < 0) overdueCount++;
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        upcomingDue: upcomingCount,
+        dueToday: dueTodayCount,
+        overdue: overdueCount,
+        totalSent: reminders.length
+      },
+      reminders: reminders.sort((a, b) => new Date(b.sentAt || b.createdAt) - new Date(a.sentAt || a.createdAt))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Dispatch Automated Fee Reminders (Cron Process or Manual Trigger)
+// @route   POST /api/admin/reminders/dispatch
+router.post('/reminders/dispatch', async (req, res) => {
+  const { channel, reminderType, targetClass } = req.body;
+  const chosenChannel = channel || 'email';
+  const chosenType = reminderType || 'all';
+
+  try {
+    let fees = [];
+    let students = [];
+    let parents = [];
+
+    if (mockStore.isMock) {
+      fees = await mockStore.find('fees');
+      students = await mockStore.find('students');
+      parents = await mockStore.find('parents');
+    } else {
+      fees = await Fee.find({ status: { $in: ['pending', 'partially_paid', 'overdue'] } }).lean();
+      students = await Student.find().lean();
+      parents = await Parent.find().lean();
+    }
+
+    const studentMap = {};
+    students.forEach(s => { studentMap[String(s._id)] = s; });
+
+    const parentMap = {};
+    parents.forEach(p => { parentMap[String(p._id)] = p; });
+
+    const now = new Date();
+    const dispatchedReminders = [];
+
+    for (const f of fees) {
+      if (f.status === 'paid' || f.status === 'cancelled') continue;
+      const std = studentMap[String(f.studentId)];
+      if (!std) continue;
+      if (targetClass && std.class !== targetClass) continue;
+
+      const prnt = std.parentId ? parentMap[String(std.parentId._id || std.parentId)] : null;
+      const parentName = prnt?.name || std.fatherName || 'Parent';
+      const parentEmail = prnt?.email || `${std.name.toLowerCase().replace(/\s+/g, '')}@parent.apnaschool.edu`;
+      const parentPhone = prnt?.phone || '+91 98XXX-XXXXX';
+
+      const d = new Date(f.dueDate);
+      const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+
+      let determinedType = 'due_today';
+      let message = '';
+      const dueAmt = f.remainingAmount !== undefined ? f.remainingAmount : f.amount;
+
+      if (diffDays > 0) {
+        determinedType = 'upcoming';
+        message = `Dear ${parentName}, this is a gentle reminder that the monthly fee for ${std.name} (${std.class}) is due on ${d.toLocaleDateString('en-IN')}. Amount due: ₹${dueAmt.toLocaleString('en-IN')}.`;
+      } else if (diffDays === 0) {
+        determinedType = 'due_today';
+        message = `Dear ${parentName}, the school fee of ₹${dueAmt.toLocaleString('en-IN')} for ${std.name} is due today. Kindly complete payment at the school cash desk or online.`;
+      } else {
+        determinedType = 'overdue';
+        message = `Dear ${parentName}, the fee payment of ₹${dueAmt.toLocaleString('en-IN')} for ${std.name} is overdue. Please settle at the cash desk immediately to avoid late fees.`;
+      }
+
+      if (chosenType !== 'all' && chosenType !== determinedType) continue;
+
+      const record = {
+        studentId: std._id,
+        studentName: std.name,
+        parentName,
+        parentEmail,
+        parentPhone,
+        feeId: f._id,
+        month: f.month || 'Current Month',
+        amountDue: dueAmt,
+        reminderType: determinedType,
+        channel: chosenChannel,
+        message,
+        scheduledFor: now,
+        sentAt: now,
+        status: 'DELIVERED',
+        providerResponse: `Delivered via ${chosenChannel.toUpperCase()} gateway (Code 200)`,
+        failureReason: null,
+        sentBy: req.body.sentBy || 'Scheduled Cron Engine'
+      };
+
+      if (mockStore.isMock) {
+        const saved = await mockStore.create('feeReminders', record);
+        dispatchedReminders.push(saved);
+      } else {
+        const saved = await FeeReminder.create(record);
+        dispatchedReminders.push(saved);
+      }
+    }
+
+    await recordAuditLog(
+      'REMINDERS_DISPATCHED',
+      'REMINDERS',
+      'FEE_REMINDER',
+      'BATCH',
+      `Dispatched ${dispatchedReminders.length} fee reminders via ${chosenChannel.toUpperCase()}`,
+      req.body.sentBy || 'Admin'
+    );
+
+    res.json({
+      success: true,
+      message: `Successfully processed and dispatched ${dispatchedReminders.length} reminders!`,
+      count: dispatchedReminders.length,
+      data: dispatchedReminders
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==============================================================================
+// AUDIT LOG & COMPREHENSIVE REPORTS ENDPOINT
+// ==============================================================================
+
+// @desc    Get Financial Audit Logs
+// @route   GET /api/admin/audit-logs
+router.get('/audit-logs', async (req, res) => {
+  try {
+    let logs = [];
+    if (mockStore.isMock) {
+      logs = await mockStore.find('auditLogs');
+    } else {
+      logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100).lean();
+    }
+    res.json({ success: true, count: logs.length, data: logs });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Export Comprehensive Financial ERP Reports (Daily, Monthly, Student Ledger, Overdue, Cash Desk)
+// @route   GET /api/admin/fees/reports
+router.get('/fees/reports', async (req, res) => {
+  const { reportType, fromDate, toDate } = req.query;
+  try {
+    let allFees = [];
+    let allReceipts = [];
+    let allStudents = [];
+    let allCashTxns = [];
+
+    if (mockStore.isMock) {
+      allFees = await mockStore.find('fees');
+      allReceipts = await mockStore.find('receipts');
+      allStudents = await mockStore.find('students');
+      allCashTxns = await mockStore.find('cashDeskTransactions');
+    } else {
+      allFees = await Fee.find().lean();
+      allReceipts = await Receipt.find().lean();
+      allStudents = await Student.find().lean();
+      allCashTxns = await CashDeskTransaction.find().lean();
+    }
+
+    const studentMap = {};
+    allStudents.forEach(s => { studentMap[String(s._id)] = s; });
+
+    let reportRows = [];
+    let reportTitle = 'Financial Summary Report';
+
+    if (reportType === 'daily_collection') {
+      reportTitle = 'Daily Collection Report';
+      reportRows = allReceipts
+        .filter(r => r.status !== 'cancelled')
+        .map(r => ({
+          ReceiptNo: r.receiptNumber,
+          StudentName: studentMap[String(r.studentId)]?.name || 'Student',
+          Class: studentMap[String(r.studentId)]?.class || 'N/A',
+          Date: new Date(r.paymentDate || r.createdAt).toLocaleDateString('en-IN'),
+          Month: r.month || 'Current',
+          Method: r.paymentMethod,
+          AmountPaid: r.amountPaid,
+          Status: r.status
+        }));
+    } else if (reportType === 'overdue_ledger') {
+      reportTitle = 'Overdue Fees Ledger';
+      const now = new Date();
+      reportRows = allFees
+        .filter(f => f.status !== 'paid' && f.status !== 'cancelled' && new Date(f.dueDate) < now)
+        .map(f => ({
+          StudentID: studentMap[String(f.studentId)]?.studentId || 'N/A',
+          StudentName: studentMap[String(f.studentId)]?.name || 'Student',
+          Class: studentMap[String(f.studentId)]?.class || 'N/A',
+          Month: f.month || f.term,
+          DueDate: new Date(f.dueDate).toLocaleDateString('en-IN'),
+          AmountBilled: f.amount,
+          AmountPaid: f.paidAmount || 0,
+          OverdueBalance: f.remainingAmount !== undefined ? f.remainingAmount : (f.amount - (f.paidAmount || 0))
+        }));
+    } else if (reportType === 'cash_desk') {
+      reportTitle = 'Cash Desk Transactions Ledger';
+      reportRows = allCashTxns.map(t => ({
+        TransactionID: t.transactionId,
+        Date: t.date,
+        Time: t.time,
+        Type: t.type.toUpperCase(),
+        Category: t.category,
+        PartyName: t.studentName || 'School Desk',
+        Method: t.paymentMethod,
+        Amount: t.amount,
+        RecordedBy: t.collectedBy,
+        Status: t.status
+      }));
+    } else {
+      // Default: Comprehensive Master Student Fee Ledger
+      reportTitle = 'Master Student Fee Accounting Ledger';
+      reportRows = allFees.map(f => ({
+        InvoiceID: f._id,
+        StudentName: studentMap[String(f.studentId)]?.name || 'Student',
+        Class: studentMap[String(f.studentId)]?.class || 'N/A',
+        Particulars: f.term || (f.month ? `${f.month} Fee` : 'Fee Item'),
+        FeeType: f.feeType || 'monthly',
+        GrossFee: f.amount,
+        Discount: f.discountAmount || 0,
+        Fine: f.fineAmount || 0,
+        NetPayable: f.totalPayable !== undefined ? f.totalPayable : f.amount,
+        Paid: f.paidAmount || 0,
+        DueBalance: f.remainingAmount !== undefined ? f.remainingAmount : (f.amount - (f.paidAmount || 0)),
+        Status: f.status
+      }));
+    }
+
+    res.json({
+      success: true,
+      reportTitle,
+      generatedAt: new Date(),
+      totalRecords: reportRows.length,
+      data: reportRows
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

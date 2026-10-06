@@ -615,6 +615,88 @@ const mockStore = {
     }
   ],
 
+  cashDeskTransactions: [
+    {
+      _id: 'cdt_1',
+      transactionId: 'TXN-CASH-10001',
+      date: new Date().toISOString().slice(0, 10),
+      time: '10:30 AM',
+      type: 'collection',
+      category: 'Admission Fee',
+      studentId: 'std_1',
+      studentName: 'Tommy Jenkins',
+      feeId: 'fee_1',
+      receiptId: 'rcp_1',
+      paymentMethod: 'Cash',
+      amount: 5000,
+      referenceNumber: 'REC-2026-00001',
+      collectedBy: 'Admin Desk',
+      notes: 'Initial admission cash fee collected at desk',
+      status: 'completed',
+      createdAt: new Date()
+    },
+    {
+      _id: 'cdt_2',
+      transactionId: 'TXN-CASH-10002',
+      date: new Date().toISOString().slice(0, 10),
+      time: '11:15 AM',
+      type: 'collection',
+      category: 'Monthly Fee',
+      studentId: 'std_2',
+      studentName: 'Lily Watson',
+      feeId: 'fee_4',
+      receiptId: 'rcp_3',
+      paymentMethod: 'UPI',
+      amount: 2500,
+      referenceNumber: 'UPI-REF-99281',
+      collectedBy: 'Admin Desk',
+      notes: 'Monthly fee paid via QR UPI',
+      status: 'completed',
+      createdAt: new Date()
+    }
+  ],
+
+  cashDeskClosings: [],
+
+  feeReminders: [
+    {
+      _id: 'rem_1',
+      studentId: 'std_1',
+      studentName: 'Tommy Jenkins',
+      parentName: 'Sarah Jenkins',
+      parentEmail: 'parent@apnaschool.edu',
+      parentPhone: '+91 98XXX-XXXXX',
+      feeId: 'fee_3',
+      month: 'March',
+      amountDue: 2200,
+      reminderType: 'due_today',
+      channel: 'email',
+      message: 'Dear Sarah Jenkins, fee of ₹2,200 for Tommy Jenkins is due. Kindly pay via cash desk or online portal.',
+      scheduledFor: new Date(),
+      sentAt: new Date(),
+      status: 'DELIVERED',
+      providerResponse: 'Delivered successfully via SMTP',
+      sentBy: 'Automated Scheduled System',
+      createdAt: new Date()
+    }
+  ],
+
+  auditLogs: [
+    {
+      _id: 'aud_1',
+      action: 'SYSTEM_INIT',
+      category: 'FINANCE',
+      performedBy: 'System Administrator',
+      performedByRole: 'admin',
+      targetEntity: 'FEE_MODULE',
+      targetId: 'SYS_01',
+      details: 'Finance and Cash Desk ERP module initialized successfully with database audit trail.',
+      changes: null,
+      ipAddress: '127.0.0.1',
+      createdAt: new Date()
+    }
+  ],
+
   // In-memory helper methods
   async find(collectionName, filter = {}) {
     const list = this[collectionName] || [];

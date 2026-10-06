@@ -334,6 +334,100 @@ export const QueryRaw = sequelize.define('Query', {
   timestamps: true
 });
 
+// 15. CashDeskTransaction
+export const CashDeskTransactionRaw = sequelize.define('CashDeskTransaction', {
+  _id: { type: DataTypes.STRING(64), primaryKey: true, defaultValue: generateId },
+  transactionId: { type: DataTypes.STRING(100), allowNull: false, unique: true },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  time: { type: DataTypes.STRING(20), allowNull: false },
+  type: { type: DataTypes.ENUM('collection', 'expense', 'refund', 'adjustment'), defaultValue: 'collection' },
+  category: { type: DataTypes.STRING(50), defaultValue: 'Monthly Fee' },
+  studentId: { type: DataTypes.STRING(64), defaultValue: null },
+  studentName: { type: DataTypes.STRING(255), defaultValue: null },
+  feeId: { type: DataTypes.STRING(64), defaultValue: null },
+  receiptId: { type: DataTypes.STRING(64), defaultValue: null },
+  paymentMethod: { type: DataTypes.STRING(50), defaultValue: 'Cash' },
+  amount: { type: DataTypes.DOUBLE, allowNull: false },
+  referenceNumber: { type: DataTypes.STRING(100), defaultValue: '' },
+  collectedBy: { type: DataTypes.STRING(100), defaultValue: 'Admin Desk' },
+  notes: { type: DataTypes.TEXT, defaultValue: '' },
+  status: { type: DataTypes.ENUM('completed', 'cancelled'), defaultValue: 'completed' },
+  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, {
+  tableName: 'cash_desk_transactions',
+  timestamps: true
+});
+
+// 16. CashDeskClosing
+export const CashDeskClosingRaw = sequelize.define('CashDeskClosing', {
+  _id: { type: DataTypes.STRING(64), primaryKey: true, defaultValue: generateId },
+  closingDate: { type: DataTypes.DATEONLY, allowNull: false, unique: true },
+  openingCash: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalCashCollected: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalUpiCollected: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalCardCollected: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalBankCollected: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalDigitalCollected: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalExpenses: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  totalRefunds: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  expectedCash: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  actualCash: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  discrepancy: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  discrepancyReason: { type: DataTypes.TEXT, defaultValue: '' },
+  closedBy: { type: DataTypes.STRING(100), defaultValue: 'Admin Desk' },
+  status: { type: DataTypes.ENUM('open', 'closed'), defaultValue: 'closed' },
+  notes: { type: DataTypes.TEXT, defaultValue: '' },
+  closedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, {
+  tableName: 'cash_desk_closings',
+  timestamps: true
+});
+
+// 17. FeeReminder
+export const FeeReminderRaw = sequelize.define('FeeReminder', {
+  _id: { type: DataTypes.STRING(64), primaryKey: true, defaultValue: generateId },
+  studentId: { type: DataTypes.STRING(64), allowNull: false },
+  studentName: { type: DataTypes.STRING(255), allowNull: false },
+  parentName: { type: DataTypes.STRING(255), defaultValue: '' },
+  parentEmail: { type: DataTypes.STRING(255), defaultValue: '' },
+  parentPhone: { type: DataTypes.STRING(50), defaultValue: '' },
+  feeId: { type: DataTypes.STRING(64), defaultValue: null },
+  month: { type: DataTypes.STRING(50), defaultValue: '' },
+  amountDue: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  reminderType: { type: DataTypes.ENUM('upcoming', 'due_today', 'overdue', 'custom'), defaultValue: 'due_today' },
+  channel: { type: DataTypes.ENUM('email', 'sms', 'whatsapp', 'in_app'), defaultValue: 'in_app' },
+  message: { type: DataTypes.TEXT, allowNull: false },
+  scheduledFor: { type: DataTypes.DATE, defaultValue: null },
+  sentAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  status: { type: DataTypes.ENUM('PENDING', 'SENT', 'DELIVERED', 'FAILED'), defaultValue: 'SENT' },
+  providerResponse: { type: DataTypes.TEXT, defaultValue: '' },
+  failureReason: { type: DataTypes.TEXT, defaultValue: '' },
+  sentBy: { type: DataTypes.STRING(100), defaultValue: 'Automated System' },
+  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, {
+  tableName: 'fee_reminders',
+  timestamps: true
+});
+
+// 18. AuditLog
+export const AuditLogRaw = sequelize.define('AuditLog', {
+  _id: { type: DataTypes.STRING(64), primaryKey: true, defaultValue: generateId },
+  action: { type: DataTypes.STRING(100), allowNull: false },
+  category: { type: DataTypes.STRING(50), defaultValue: 'FINANCE' },
+  performedBy: { type: DataTypes.STRING(100), defaultValue: 'Admin' },
+  performedByRole: { type: DataTypes.STRING(50), defaultValue: 'admin' },
+  targetEntity: { type: DataTypes.STRING(50), allowNull: false },
+  targetId: { type: DataTypes.STRING(64), defaultValue: null },
+  details: { type: DataTypes.TEXT, defaultValue: '' },
+  changes: { type: DataTypes.JSON, defaultValue: null },
+  ipAddress: { type: DataTypes.STRING(50), defaultValue: '' },
+  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, {
+  tableName: 'audit_logs',
+  timestamps: true
+});
+
 // Wrap raw models with Mongoose-compatible API
 export const User = wrapModel(UserRaw);
 export const Parent = wrapModel(ParentRaw);
@@ -350,6 +444,10 @@ export const Event = wrapModel(EventRaw);
 export const Gallery = wrapModel(GalleryRaw);
 export const Message = wrapModel(MessageRaw);
 export const Query = wrapModel(QueryRaw);
+export const CashDeskTransaction = wrapModel(CashDeskTransactionRaw);
+export const CashDeskClosing = wrapModel(CashDeskClosingRaw);
+export const FeeReminder = wrapModel(FeeReminderRaw);
+export const AuditLog = wrapModel(AuditLogRaw);
 
 // Export map of wrapped models
 export const getModels = () => ({
@@ -367,7 +465,11 @@ export const getModels = () => ({
   Event,
   Gallery,
   Message,
-  Query
+  Query,
+  CashDeskTransaction,
+  CashDeskClosing,
+  FeeReminder,
+  AuditLog
 });
 
 // Connect to Hostinger MySQL Database
