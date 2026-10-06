@@ -71,14 +71,6 @@ export default function AdminDashboard() {
   const [admBirthCertificate, setAdmBirthCertificate] = useState(null);
   const [admPhoto, setAdmPhoto] = useState(null);
 
-  // New document fields
-  const [admReportCard, setAdmReportCard] = useState(null);
-  const [admTransferCertificate, setAdmTransferCertificate] = useState(null);
-  const [admAadhaarCard, setAdmAadhaarCard] = useState(null);
-  const [admFatherAadhaarCard, setAdmFatherAadhaarCard] = useState(null);
-  const [admMotherAadhaarCard, setAdmMotherAadhaarCard] = useState(null);
-  const [admAddressProofType, setAdmAddressProofType] = useState('Aadhaar Card');
-  const [admAddressProof, setAdmAddressProof] = useState(null);
   const [admissionFee, setAdmissionFee] = useState('');
 
   // Receipt Modal State
@@ -930,31 +922,12 @@ export default function AdminDashboard() {
           formData.append('parentDetails', JSON.stringify(parentDetails));
           formData.append('password', admParentPassword);
           formData.append('admissionFee', admissionFee || '0');
-          formData.append('addressProofType', admAddressProofType);
 
           if (admBirthCertificate) {
             formData.append('birthCertificate', admBirthCertificate);
           }
           if (admPhoto) {
             formData.append('photo', admPhoto);
-          }
-          if (admReportCard) {
-            formData.append('reportCard', admReportCard);
-          }
-          if (admTransferCertificate) {
-            formData.append('transferCertificate', admTransferCertificate);
-          }
-          if (admAadhaarCard) {
-            formData.append('aadhaarCard', admAadhaarCard);
-          }
-          if (admFatherAadhaarCard) {
-            formData.append('fatherAadhaarCard', admFatherAadhaarCard);
-          }
-          if (admMotherAadhaarCard) {
-            formData.append('motherAadhaarCard', admMotherAadhaarCard);
-          }
-          if (admAddressProof) {
-            formData.append('addressProof', admAddressProof);
           }
 
           const res = await fetch('/api/admin/admissions/create', {
@@ -1020,32 +993,13 @@ export default function AdminDashboard() {
             setAdmParentPassword('');
             setAdmBirthCertificate(null);
             setAdmPhoto(null);
-            setAdmReportCard(null);
-            setAdmTransferCertificate(null);
-            setAdmAadhaarCard(null);
-            setAdmFatherAadhaarCard(null);
-            setAdmMotherAadhaarCard(null);
-            setAdmAddressProofType('Aadhaar Card');
-            setAdmAddressProof(null);
             setAdmissionFee('');
 
             const certInput = document.getElementById('adm-cert-input');
             const photoInput = document.getElementById('adm-photo-input');
-            const reportInput = document.getElementById('adm-report-input');
-            const tcInput = document.getElementById('adm-tc-input');
-            const aadhaarInput = document.getElementById('adm-aadhaar-input');
-            const fatherAadhaarInput = document.getElementById('adm-father-aadhaar-input');
-            const motherAadhaarInput = document.getElementById('adm-mother-aadhaar-input');
-            const addressProofInput = document.getElementById('adm-address-proof-input');
 
             if (certInput) certInput.value = '';
             if (photoInput) photoInput.value = '';
-            if (reportInput) reportInput.value = '';
-            if (tcInput) tcInput.value = '';
-            if (aadhaarInput) aadhaarInput.value = '';
-            if (fatherAadhaarInput) fatherAadhaarInput.value = '';
-            if (motherAadhaarInput) motherAadhaarInput.value = '';
-            if (addressProofInput) addressProofInput.value = '';
 
             setAdmissionsSubTab('history');
             fetchAdmissions();
@@ -2084,76 +2038,7 @@ export default function AdminDashboard() {
                             className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <label className="font-bold text-slate-600">Previous School Report Card / Marksheet (PDF / Image)</label>
-                          <input
-                            id="adm-report-input"
-                            type="file" accept=".pdf,.png,.jpg,.jpeg"
-                            onChange={e => setAdmReportCard(e.target.files[0])}
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="font-bold text-slate-600">Transfer Certificate (TC) (PDF / Image) (if applicable)</label>
-                          <input
-                            id="adm-tc-input"
-                            type="file" accept=".pdf,.png,.jpg,.jpeg"
-                            onChange={e => setAdmTransferCertificate(e.target.files[0])}
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="font-bold text-slate-600">Student Aadhaar Card (PDF / Image) (if available)</label>
-                          <input
-                            id="adm-aadhaar-input"
-                            type="file" accept=".pdf,.png,.jpg,.jpeg"
-                            onChange={e => setAdmAadhaarCard(e.target.files[0])}
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="font-bold text-slate-600">Father's Aadhaar Card (PDF / Image)</label>
-                          <input
-                            id="adm-father-aadhaar-input"
-                            type="file" accept=".pdf,.png,.jpg,.jpeg"
-                            onChange={e => setAdmFatherAadhaarCard(e.target.files[0])}
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="font-bold text-slate-600">Mother's Aadhaar Card (PDF / Image)</label>
-                          <input
-                            id="adm-mother-aadhaar-input"
-                            type="file" accept=".pdf,.png,.jpg,.jpeg"
-                            onChange={e => setAdmMotherAadhaarCard(e.target.files[0])}
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
-                          />
-                        </div>
 
-                        <div className="grid grid-cols-1 gap-3 p-3 space-y-1 border sm:col-span-2 sm:grid-cols-2 bg-slate-100/50 rounded-2xl border-slate-200/50">
-                          <div className="space-y-1">
-                            <label className="font-bold text-slate-600">Address Proof Document Type</label>
-                            <select
-                              value={admAddressProofType}
-                              onChange={e => setAdmAddressProofType(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none font-semibold text-slate-600 text-xs"
-                            >
-                              <option value="Aadhaar Card">Aadhaar Card</option>
-                              <option value="Electricity Bill">Electricity Bill</option>
-                              <option value="Water Bill">Water Bill</option>
-                              <option value="Rent Agreement">Rent Agreement</option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="font-bold text-slate-600">Upload Selected Address Proof (PDF / Image)</label>
-                            <input
-                              id="adm-address-proof-input"
-                              type="file" accept=".pdf,.png,.jpg,.jpeg"
-                              onChange={e => setAdmAddressProof(e.target.files[0])}
-                              className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none text-xs"
-                            />
-                          </div>
-                        </div>
                       </div>
                     </div>
 
@@ -4049,13 +3934,7 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-3 text-[10px]">
                     {Object.entries({
                       'Birth Certificate': selectedAdmission.documents?.birthCertificate,
-                      'Student Photograph': selectedAdmission.documents?.photo,
-                      'Previous Report Card / Marksheet': selectedAdmission.documents?.reportCard,
-                      'Transfer Certificate (TC)': selectedAdmission.documents?.transferCertificate,
-                      'Student Aadhaar Card': selectedAdmission.documents?.aadhaarCard,
-                      'Father\'s Aadhaar Card': selectedAdmission.documents?.fatherAadhaarCard,
-                      'Mother\'s Aadhaar Card': selectedAdmission.documents?.motherAadhaarCard,
-                      [`Address Proof (${selectedAdmission.documents?.addressProofType || 'Proof'})`]: selectedAdmission.documents?.addressProof
+                      'Student Photograph': selectedAdmission.documents?.photo
                     }).map(([label, path]) => {
                       return (
                         <div key={label} className="flex flex-col justify-between p-2 space-y-1 border bg-slate-50 border-slate-100 rounded-xl">
