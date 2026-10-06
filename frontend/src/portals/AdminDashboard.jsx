@@ -3934,13 +3934,7 @@ export default function AdminDashboard() {
                   <div className="grid grid-cols-2 gap-3 text-[10px]">
                     {Object.entries({
                       'Birth Certificate': selectedAdmission.documents?.birthCertificate,
-                      'Student Photograph': selectedAdmission.documents?.photo,
-                      ...(selectedAdmission.documents?.reportCard ? { 'Previous Report Card / Marksheet': selectedAdmission.documents.reportCard } : {}),
-                      ...(selectedAdmission.documents?.transferCertificate ? { 'Transfer Certificate (TC)': selectedAdmission.documents.transferCertificate } : {}),
-                      ...(selectedAdmission.documents?.aadhaarCard ? { 'Student Aadhaar Card': selectedAdmission.documents.aadhaarCard } : {}),
-                      ...(selectedAdmission.documents?.fatherAadhaarCard ? { 'Father\'s Aadhaar Card': selectedAdmission.documents.fatherAadhaarCard } : {}),
-                      ...(selectedAdmission.documents?.motherAadhaarCard ? { 'Mother\'s Aadhaar Card': selectedAdmission.documents.motherAadhaarCard } : {}),
-                      ...(selectedAdmission.documents?.addressProof ? { [`Address Proof (${selectedAdmission.documents?.addressProofType || 'Proof'})`]: selectedAdmission.documents.addressProof } : {})
+                      'Student Photograph': selectedAdmission.documents?.photo
                     }).map(([label, path]) => {
                       return (
                         <div key={label} className="flex flex-col justify-between p-2 space-y-1 border bg-slate-50 border-slate-100 rounded-xl">
