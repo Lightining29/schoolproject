@@ -131,21 +131,30 @@ export const generateFeeReceiptPDF = (receiptData) => {
   doc.text(receipt.transactionId || 'TXN-DIRECT', 142, 93);
 
   // 4. Fee Components Table
+  const grossAmt = Number(fee.amount || receipt.amountDue || receipt.amountPaid || 0);
+  const discountAmt = Number(fee.discountAmount || receipt.discount || 0);
+  const fineAmt = Number(fee.fineAmount || receipt.fine || 0);
+  const paidAmt = Number(receipt.amountPaid || fee.paidAmount || 0);
+  const prevDue = Number(fee.previousDue || 0);
+  const remainingDue = Number(receipt.remainingAmount !== undefined ? receipt.remainingAmount : (fee.remainingAmount || 0));
+
   const tableData = [
     [
       '1',
-      fee.term || 'Term Fee Component',
-      `Rs. ${(fee.amount || receipt.amountPaid || 0).toLocaleString('en-IN')}`,
-      fee.discountAmount ? `- Rs. ${Number(fee.discountAmount).toLocaleString('en-IN')}` : 'Rs. 0',
-      `Rs. ${(receipt.amountPaid || fee.paidAmount || 0).toLocaleString('en-IN')}`
+      fee.term || (receipt.month ? `${receipt.month} Fee Component` : 'Tuition & Academic Component'),
+      `Rs. ${grossAmt.toLocaleString('en-IN')}`,
+      discountAmt > 0 ? `- Rs. ${discountAmt.toLocaleString('en-IN')}` : 'Rs. 0',
+      fineAmt > 0 ? `+ Rs. ${fineAmt.toLocaleString('en-IN')}` : 'Rs. 0',
+      `Rs. ${paidAmt.toLocaleString('en-IN')}`
     ]
   ];
 
-  // If discount reason exists, add sub-row
-  if (fee.discountReason) {
+  // If discount or fine reason exists, add sub-row
+  if (fee.discountReason || receipt.remarks) {
     tableData.push([
       '',
-      `Concession Applied: ${fee.discountReason}`,
+      `Notes: ${fee.discountReason || receipt.remarks || 'Standard Fee Schedule'}`,
+      '',
       '',
       '',
       ''
@@ -154,7 +163,7 @@ export const generateFeeReceiptPDF = (receiptData) => {
 
   doc.autoTable({
     startY: 108,
-    head: [['#', 'Fee Particulars / Term', 'Gross Amount', 'Discount', 'Amount Paid']],
+    head: [['#', 'Fee Particulars / Month', 'Gross Due', 'Discount', 'Late Fine', 'Amount Paid']],
     body: tableData,
     theme: 'grid',
     headStyles: {
@@ -172,36 +181,43 @@ export const generateFeeReceiptPDF = (receiptData) => {
     },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 80 },
-      2: { cellWidth: 32, halign: 'right' },
-      3: { cellWidth: 32, halign: 'right' },
-      4: { cellWidth: 36, halign: 'right' }
+      1: { cellWidth: 70 },
+      2: { cellWidth: 26, halign: 'right' },
+      3: { cellWidth: 26, halign: 'right' },
+      4: { cellWidth: 26, halign: 'right' },
+      5: { cellWidth: 32, halign: 'right' }
     }
   });
 
   // 5. Total Calculations Box
   const finalY = doc.lastAutoTable.finalY + 8;
   doc.setFillColor(...lightBg);
-  doc.roundedRect(114, finalY, 82, 34, 2, 2, 'F');
+  doc.roundedRect(110, finalY, 86, 42, 2, 2, 'F');
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(114, finalY, 82, 34, 2, 2, 'S');
+  doc.roundedRect(110, finalY, 86, 42, 2, 2, 'S');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...textColor);
-  doc.text('Total Paid This Receipt:', 118, finalY + 8);
-  doc.text(`Rs. ${(receipt.amountPaid || fee.paidAmount || 0).toLocaleString('en-IN')}`, 190, finalY + 8, { align: 'right' });
 
-  doc.text('Outstanding Due Balance:', 118, finalY + 16);
-  doc.setTextColor(fee.balanceAmount > 0 ? 220 : 16, fee.balanceAmount > 0 ? 38 : 185, fee.balanceAmount > 0 ? 38 : 129);
-  doc.text(`Rs. ${(fee.balanceAmount || 0).toLocaleString('en-IN')}`, 190, finalY + 16, { align: 'right' });
+  doc.text('Previous Due Carried:', 114, finalY + 8);
+  doc.text(`Rs. ${prevDue.toLocaleString('en-IN')}`, 192, finalY + 8, { align: 'right' });
+
+  doc.text('Total Paid This Receipt:', 114, finalY + 16);
+  doc.setTextColor(22, 101, 52);
+  doc.text(`Rs. ${paidAmt.toLocaleString('en-IN')}`, 192, finalY + 16, { align: 'right' });
 
   doc.setTextColor(...textColor);
-  doc.text('Payment Clearance Status:', 118, finalY + 24);
-  doc.text(isPaid ? 'Cleared (Nil Balance)' : 'Installment Active', 190, finalY + 24, { align: 'right' });
+  doc.text('Remaining Balance Due:', 114, finalY + 24);
+  doc.setTextColor(remainingDue > 0 ? 220 : 16, remainingDue > 0 ? 38 : 185, remainingDue > 0 ? 38 : 129);
+  doc.text(`Rs. ${remainingDue.toLocaleString('en-IN')}`, 192, finalY + 24, { align: 'right' });
+
+  doc.setTextColor(...textColor);
+  doc.text('Clearance Status:', 114, finalY + 32);
+  doc.text(remainingDue <= 0 ? 'Fully Cleared' : 'Partial / Balance Due', 192, finalY + 32, { align: 'right' });
 
   // 6. Terms & Signature Area
-  const termsY = finalY + 45;
+  const termsY = finalY + 52;
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);

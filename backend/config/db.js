@@ -138,10 +138,18 @@ export const FeeRaw = sequelize.define('Fee', {
   amount: { type: DataTypes.DOUBLE, allowNull: false },
   term: { type: DataTypes.STRING(255), allowNull: false },
   dueDate: { type: DataTypes.DATE, allowNull: false },
-  status: { type: DataTypes.ENUM('paid', 'pending', 'overdue', 'partially_paid'), defaultValue: 'pending' },
-  paidAmount: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  status: { type: DataTypes.ENUM('paid', 'pending', 'overdue', 'partially_paid', 'cancelled'), defaultValue: 'pending' },
+  feeType: { type: DataTypes.STRING(50), defaultValue: 'monthly' },
+  month: { type: DataTypes.STRING(50), defaultValue: '' },
+  year: { type: DataTypes.INTEGER, defaultValue: 2026 },
   discountAmount: { type: DataTypes.DOUBLE, defaultValue: 0 },
   discountReason: { type: DataTypes.STRING(255), defaultValue: '' },
+  fineAmount: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  fineReason: { type: DataTypes.STRING(255), defaultValue: '' },
+  totalPayable: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  paidAmount: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  remainingAmount: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  previousDue: { type: DataTypes.DOUBLE, defaultValue: 0 },
   installments: { type: DataTypes.JSON, defaultValue: [] },
   paymentDate: { type: DataTypes.DATE, defaultValue: null },
   transactionId: { type: DataTypes.STRING(255), defaultValue: '' },
@@ -173,6 +181,30 @@ export const FeeStructureRaw = sequelize.define('FeeStructure', {
   timestamps: true
 });
 
+// 6b. StudentFeeStructure
+export const StudentFeeStructureRaw = sequelize.define('StudentFeeStructure', {
+  _id: { type: DataTypes.STRING(64), primaryKey: true, defaultValue: generateId },
+  studentId: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+  academicYear: { type: DataTypes.STRING(20), defaultValue: '2026-2027' },
+  admissionFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  registrationFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  tuitionFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  monthlyFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: true } },
+  examFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  transportFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  hostelFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  libraryFee: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  otherCharges: { type: DataTypes.JSON, defaultValue: { amount: 0, enabled: false } },
+  discount: { type: DataTypes.JSON, defaultValue: { amount: 0, reason: '' } },
+  fine: { type: DataTypes.JSON, defaultValue: { amount: 0, reason: '' } },
+  notes: { type: DataTypes.TEXT, defaultValue: '' },
+  isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+  createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, {
+  tableName: 'student_fee_structures',
+  timestamps: true
+});
+
 // 7. FineRule
 export const FineRuleRaw = sequelize.define('FineRule', {
   _id: { type: DataTypes.STRING(64), primaryKey: true, defaultValue: generateId },
@@ -192,9 +224,18 @@ export const ReceiptRaw = sequelize.define('Receipt', {
   studentId: { type: DataTypes.STRING(64), allowNull: false },
   receiptNumber: { type: DataTypes.STRING(255), allowNull: false, unique: true },
   amountPaid: { type: DataTypes.DOUBLE, allowNull: false },
+  feeType: { type: DataTypes.STRING(50), defaultValue: 'monthly' },
+  month: { type: DataTypes.STRING(50), defaultValue: '' },
+  amountDue: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  discount: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  fine: { type: DataTypes.DOUBLE, defaultValue: 0 },
+  remainingAmount: { type: DataTypes.DOUBLE, defaultValue: 0 },
   paymentMethod: { type: DataTypes.STRING(255), allowNull: false },
   paymentDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   transactionId: { type: DataTypes.STRING(255), allowNull: false },
+  status: { type: DataTypes.ENUM('completed', 'cancelled'), defaultValue: 'completed' },
+  createdByAdmin: { type: DataTypes.STRING(100), defaultValue: 'Admin Desk' },
+  remarks: { type: DataTypes.TEXT, defaultValue: '' },
   createdAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
 }, {
   tableName: 'receipts',
@@ -300,6 +341,7 @@ export const Teacher = wrapModel(TeacherRaw);
 export const Student = wrapModel(StudentRaw);
 export const Fee = wrapModel(FeeRaw);
 export const FeeStructure = wrapModel(FeeStructureRaw);
+export const StudentFeeStructure = wrapModel(StudentFeeStructureRaw);
 export const FineRule = wrapModel(FineRuleRaw);
 export const Receipt = wrapModel(ReceiptRaw);
 export const Admission = wrapModel(AdmissionRaw);
@@ -317,6 +359,7 @@ export const getModels = () => ({
   Student,
   Fee,
   FeeStructure,
+  StudentFeeStructure,
   FineRule,
   Receipt,
   Admission,

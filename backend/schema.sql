@@ -83,10 +83,18 @@ CREATE TABLE IF NOT EXISTS `fees` (
   `amount` DOUBLE NOT NULL,
   `term` VARCHAR(255) NOT NULL,
   `dueDate` DATETIME NOT NULL,
-  `status` ENUM('paid', 'pending', 'overdue', 'partially_paid') NOT NULL DEFAULT 'pending',
-  `paidAmount` DOUBLE DEFAULT 0,
+  `status` ENUM('paid', 'pending', 'overdue', 'partially_paid', 'cancelled') NOT NULL DEFAULT 'pending',
+  `feeType` VARCHAR(50) DEFAULT 'monthly',
+  `month` VARCHAR(50) DEFAULT '',
+  `year` INT DEFAULT 2026,
   `discountAmount` DOUBLE DEFAULT 0,
   `discountReason` VARCHAR(255) DEFAULT '',
+  `fineAmount` DOUBLE DEFAULT 0,
+  `fineReason` VARCHAR(255) DEFAULT '',
+  `totalPayable` DOUBLE DEFAULT 0,
+  `paidAmount` DOUBLE DEFAULT 0,
+  `remainingAmount` DOUBLE DEFAULT 0,
+  `previousDue` DOUBLE DEFAULT 0,
   `installments` JSON NULL,
   `paymentDate` DATETIME NULL,
   `transactionId` VARCHAR(255) DEFAULT '',
@@ -98,7 +106,7 @@ CREATE TABLE IF NOT EXISTS `fees` (
   INDEX `idx_fees_dueDate` (`dueDate`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. Fee Structures Table
+-- 6. Fee Structures Table (Class-level Defaults)
 CREATE TABLE IF NOT EXISTS `fee_structures` (
   `_id` VARCHAR(64) NOT NULL PRIMARY KEY,
   `class` VARCHAR(50) NOT NULL UNIQUE,
@@ -115,6 +123,29 @@ CREATE TABLE IF NOT EXISTS `fee_structures` (
   `isActive` BOOLEAN DEFAULT TRUE,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 6b. Student Fee Structures Table (Individual Student Specific Structure)
+CREATE TABLE IF NOT EXISTS `student_fee_structures` (
+  `_id` VARCHAR(64) NOT NULL PRIMARY KEY,
+  `studentId` VARCHAR(64) NOT NULL UNIQUE,
+  `academicYear` VARCHAR(20) DEFAULT '2026-2027',
+  `admissionFee` JSON NULL,
+  `registrationFee` JSON NULL,
+  `tuitionFee` JSON NULL,
+  `monthlyFee` JSON NULL,
+  `examFee` JSON NULL,
+  `transportFee` JSON NULL,
+  `hostelFee` JSON NULL,
+  `libraryFee` JSON NULL,
+  `otherCharges` JSON NULL,
+  `discount` JSON NULL,
+  `fine` JSON NULL,
+  `notes` TEXT NULL,
+  `isActive` BOOLEAN DEFAULT TRUE,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_student_fee_structures_studentId` (`studentId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. Fine Rules Table
@@ -134,13 +165,23 @@ CREATE TABLE IF NOT EXISTS `receipts` (
   `studentId` VARCHAR(64) NOT NULL,
   `receiptNumber` VARCHAR(255) NOT NULL UNIQUE,
   `amountPaid` DOUBLE NOT NULL,
+  `feeType` VARCHAR(50) DEFAULT 'monthly',
+  `month` VARCHAR(50) DEFAULT '',
+  `amountDue` DOUBLE DEFAULT 0,
+  `discount` DOUBLE DEFAULT 0,
+  `fine` DOUBLE DEFAULT 0,
+  `remainingAmount` DOUBLE DEFAULT 0,
   `paymentMethod` VARCHAR(255) NOT NULL,
   `paymentDate` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `transactionId` VARCHAR(255) NOT NULL,
+  `status` ENUM('completed', 'cancelled') NOT NULL DEFAULT 'completed',
+  `createdByAdmin` VARCHAR(100) DEFAULT 'Admin Desk',
+  `remarks` TEXT NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_receipts_feeId` (`feeId`),
-  INDEX `idx_receipts_studentId` (`studentId`)
+  INDEX `idx_receipts_studentId` (`studentId`),
+  INDEX `idx_receipts_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 9. Admissions Applications Table

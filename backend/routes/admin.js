@@ -13,6 +13,7 @@ import Fee from '../models/Fee.js';
 import Query from '../models/Query.js';
 import Receipt from '../models/Receipt.js';
 import FeeStructure from '../models/FeeStructure.js';
+import StudentFeeStructure from '../models/StudentFeeStructure.js';
 import FineRule from '../models/FineRule.js';
 import Event from '../models/Event.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -23,11 +24,19 @@ import { generateSchoolNoticeAI, generateFinancialForecastAI } from '../config/a
 const router = express.Router();
 
 async function assignFeesForStudent(studentId, className, isMock, customAdmissionFee) {
-  let structure = null;
+  // Check if student has a custom StudentFeeStructure
+  let studentStructure = null;
   if (isMock) {
-    structure = await mockStore.findOne('feeStructures', { class: className, isActive: true });
+    studentStructure = await mockStore.findOne('studentFeeStructures', { studentId });
   } else {
-    structure = await FeeStructure.findOne({ class: className, isActive: true }).lean();
+    studentStructure = await StudentFeeStructure.findOne({ studentId, isActive: true }).lean();
+  }
+
+  let classStructure = null;
+  if (isMock) {
+    classStructure = await mockStore.findOne('feeStructures', { class: className, isActive: true });
+  } else {
+    classStructure = await FeeStructure.findOne({ class: className, isActive: true }).lean();
   }
 
   const defaultClassFees = {
@@ -50,19 +59,49 @@ async function assignFeesForStudent(studentId, className, isMock, customAdmissio
   let admissionFee = Number(customAdmissionFee) || 0;
   let annualCharges = 0;
   let examinationFee = 0;
+  let registrationFee = 0;
+  let transportFee = 0;
+  let discountAmount = 0;
+  let discountReason = '';
 
-  if (structure) {
-    if (!admissionFee && structure.admissionFee) admissionFee = structure.admissionFee;
-    annualCharges = structure.annualCharges || 0;
-    examinationFee = structure.examinationFee || 0;
+  if (studentStructure) {
+    // If student-specific structure exists and is configured by admin
+    if (studentStructure.admissionFee?.enabled) admissionFee = Number(studentStructure.admissionFee.amount) || admissionFee;
+    if (studentStructure.registrationFee?.enabled) registrationFee = Number(studentStructure.registrationFee.amount) || 0;
+    if (studentStructure.examFee?.enabled) examinationFee = Number(studentStructure.examFee.amount) || 0;
+    if (studentStructure.transportFee?.enabled) transportFee = Number(studentStructure.transportFee.amount) || 0;
     
-    monthlySum = (structure.tuitionFee || monthlySum) +
-                 (structure.computerFee || 0) +
-                 (structure.developmentFee || 0) +
-                 (structure.activityFee || 0) +
-                 (structure.smartClassFee || 0) +
-                 (structure.transportFee || 0) +
-                 (structure.customFees || []).reduce((sum, f) => sum + (f.amount || 0), 0);
+    // Monthly components
+    let baseMonthly = 0;
+    if (studentStructure.monthlyFee?.enabled) {
+      baseMonthly += Number(studentStructure.monthlyFee.amount) || 0;
+    } else if (studentStructure.tuitionFee?.enabled) {
+      baseMonthly += Number(studentStructure.tuitionFee.amount) || 0;
+    }
+    if (studentStructure.libraryFee?.enabled) baseMonthly += Number(studentStructure.libraryFee.amount) || 0;
+    if (studentStructure.hostelFee?.enabled) baseMonthly += Number(studentStructure.hostelFee.amount) || 0;
+    if (studentStructure.otherCharges?.enabled) baseMonthly += Number(studentStructure.otherCharges.amount) || 0;
+
+    if (baseMonthly > 0) {
+      monthlySum = baseMonthly;
+    }
+
+    if (studentStructure.discount?.amount > 0) {
+      discountAmount = Number(studentStructure.discount.amount);
+      discountReason = studentStructure.discount.reason || 'Admin Concession';
+    }
+  } else if (classStructure) {
+    if (!admissionFee && classStructure.admissionFee) admissionFee = classStructure.admissionFee;
+    annualCharges = classStructure.annualCharges || 0;
+    examinationFee = classStructure.examinationFee || 0;
+    
+    monthlySum = (classStructure.tuitionFee || monthlySum) +
+                 (classStructure.computerFee || 0) +
+                 (classStructure.developmentFee || 0) +
+                 (classStructure.activityFee || 0) +
+                 (classStructure.smartClassFee || 0) +
+                 (classStructure.transportFee || 0) +
+                 (classStructure.customFees || []).reduce((sum, f) => sum + (f.amount || 0), 0);
   }
 
   const feeRecords = [];
@@ -74,10 +113,32 @@ async function assignFeesForStudent(studentId, className, isMock, customAdmissio
       studentId,
       amount: admissionFee,
       term: 'Admission Fee',
+      feeType: 'admission',
       dueDate: now,
       status: 'paid',
+      paidAmount: admissionFee,
+      totalPayable: admissionFee,
+      remainingAmount: 0,
       paymentDate: now,
       transactionId: `TXN-ADM-${Date.now()}`,
+      paymentMethod: 'Admission Desk Cash'
+    });
+  }
+
+  // 1b. Create Registration Fee if any
+  if (registrationFee > 0) {
+    feeRecords.push({
+      studentId,
+      amount: registrationFee,
+      term: 'Registration Fee',
+      feeType: 'registration',
+      dueDate: now,
+      status: 'paid',
+      paidAmount: registrationFee,
+      totalPayable: registrationFee,
+      remainingAmount: 0,
+      paymentDate: now,
+      transactionId: `TXN-REG-${Date.now()}`,
       paymentMethod: 'Admission Desk Cash'
     });
   }
@@ -88,8 +149,12 @@ async function assignFeesForStudent(studentId, className, isMock, customAdmissio
       studentId,
       amount: annualCharges,
       term: 'Annual Maintenance Charges',
+      feeType: 'annual',
       dueDate: now,
       status: 'pending',
+      totalPayable: annualCharges,
+      remainingAmount: annualCharges,
+      paidAmount: 0,
       paymentDate: null,
       transactionId: '',
       paymentMethod: ''
@@ -104,24 +169,57 @@ async function assignFeesForStudent(studentId, className, isMock, customAdmissio
       studentId,
       amount: examinationFee,
       term: 'Examination Fee',
+      feeType: 'exam',
       dueDate: examDate,
       status: 'pending',
+      totalPayable: examinationFee,
+      remainingAmount: examinationFee,
+      paidAmount: 0,
       paymentDate: null,
       transactionId: '',
       paymentMethod: ''
     });
   }
 
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
   // 4. Create 12 Monthly Tuition/Component Fee invoices
+  const startMonthIndex = now.getMonth();
+  const currentYear = now.getFullYear();
+
   for (let i = 1; i <= 12; i++) {
     const dueDate = new Date();
     dueDate.setMonth(dueDate.getMonth() + (i - 1));
-    const isPaid = i === 1; // Month 1 paid by default upon admission
+    dueDate.setDate(10); // Standard 10th of each month
+
+    const monthIndex = (startMonthIndex + (i - 1)) % 12;
+    const monthYear = currentYear + Math.floor((startMonthIndex + (i - 1)) / 12);
+    const mName = monthNames[monthIndex];
+
+    const isPaid = i === 1; // Month 1 paid upon admission
+    const finalMonthFee = monthlySum + transportFee;
+    const itemDiscount = isPaid ? Math.min(discountAmount, finalMonthFee) : 0;
+    const netPayable = Math.max(0, finalMonthFee - itemDiscount);
+
     feeRecords.push({
       studentId,
-      amount: monthlySum,
-      term: `Month ${i} Tuition Fee (${className})`,
+      amount: finalMonthFee,
+      term: `${mName} ${monthYear} Monthly Fee (${className})`,
+      feeType: 'monthly',
+      month: mName,
+      year: monthYear,
       dueDate,
+      discountAmount: itemDiscount,
+      discountReason: itemDiscount > 0 ? discountReason : '',
+      fineAmount: 0,
+      fineReason: '',
+      totalPayable: netPayable,
+      paidAmount: isPaid ? netPayable : 0,
+      remainingAmount: isPaid ? 0 : netPayable,
+      previousDue: 0,
       status: isPaid ? 'paid' : 'pending',
       paymentDate: isPaid ? now : null,
       transactionId: isPaid ? `TXN-INIT-${Date.now()}-${i}` : '',
@@ -1343,6 +1441,750 @@ router.get('/fees', async (req, res) => {
     }
     const fees = await Fee.find().populate({ path: 'studentId', select: 'name class' }).sort({ createdAt: -1 });
     res.json({ success: true, data: fees });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
+// ADVANCED ADMIN-CONTROLLED FEE MANAGEMENT
+// ==========================================
+
+// Helper: Calculate standard monthly name
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// @desc    Get or create individual student fee structure
+// @route   GET /api/admin/fees/student-structure/:studentId
+router.get('/fees/student-structure/:studentId', async (req, res) => {
+  const { studentId } = req.params;
+  try {
+    let student = null;
+    let structure = null;
+
+    if (mockStore.isMock) {
+      student = await mockStore.findById('students', studentId);
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      structure = await mockStore.findOne('studentFeeStructures', { studentId });
+    } else {
+      student = await Student.findById(studentId);
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      structure = await StudentFeeStructure.findOne({ studentId });
+    }
+
+    // Default structure template if not yet configured
+    if (!structure) {
+      structure = {
+        studentId,
+        academicYear: '2026-2027',
+        admissionFee: { amount: 0, enabled: false },
+        registrationFee: { amount: 0, enabled: false },
+        tuitionFee: { amount: 2500, enabled: true },
+        monthlyFee: { amount: 2500, enabled: true },
+        examFee: { amount: 0, enabled: false },
+        transportFee: { amount: 0, enabled: false },
+        hostelFee: { amount: 0, enabled: false },
+        libraryFee: { amount: 0, enabled: false },
+        otherCharges: { amount: 0, enabled: false },
+        discount: { amount: 0, reason: '' },
+        fine: { amount: 0, reason: '' },
+        notes: '',
+        isActive: true
+      };
+    }
+
+    res.json({
+      success: true,
+      student: { _id: student._id, name: student.name, studentId: student.studentId, class: student.class },
+      data: structure
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Save or update individual student fee structure
+// @route   POST /api/admin/fees/student-structure/:studentId
+router.post('/fees/student-structure/:studentId', async (req, res) => {
+  const { studentId } = req.params;
+  const {
+    academicYear,
+    admissionFee,
+    registrationFee,
+    tuitionFee,
+    monthlyFee,
+    examFee,
+    transportFee,
+    hostelFee,
+    libraryFee,
+    otherCharges,
+    discount,
+    fine,
+    notes,
+    isActive
+  } = req.body;
+
+  try {
+    let student = null;
+    if (mockStore.isMock) {
+      student = await mockStore.findById('students', studentId);
+    } else {
+      student = await Student.findById(studentId);
+    }
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+
+    const payload = {
+      studentId,
+      academicYear: academicYear || '2026-2027',
+      admissionFee: admissionFee || { amount: 0, enabled: false },
+      registrationFee: registrationFee || { amount: 0, enabled: false },
+      tuitionFee: tuitionFee || { amount: 0, enabled: false },
+      monthlyFee: monthlyFee || { amount: 0, enabled: true },
+      examFee: examFee || { amount: 0, enabled: false },
+      transportFee: transportFee || { amount: 0, enabled: false },
+      hostelFee: hostelFee || { amount: 0, enabled: false },
+      libraryFee: libraryFee || { amount: 0, enabled: false },
+      otherCharges: otherCharges || { amount: 0, enabled: false },
+      discount: discount || { amount: 0, reason: '' },
+      fine: fine || { amount: 0, reason: '' },
+      notes: notes || '',
+      isActive: isActive !== undefined ? isActive : true
+    };
+
+    let savedStructure = null;
+    if (mockStore.isMock) {
+      const existing = await mockStore.findOne('studentFeeStructures', { studentId });
+      if (existing) {
+        savedStructure = await mockStore.findByIdAndUpdate('studentFeeStructures', existing._id, payload);
+      } else {
+        savedStructure = await mockStore.create('studentFeeStructures', payload);
+      }
+    } else {
+      const existing = await StudentFeeStructure.findOne({ studentId });
+      if (existing) {
+        Object.assign(existing, payload);
+        savedStructure = await existing.save();
+      } else {
+        savedStructure = await StudentFeeStructure.create(payload);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Fee structure successfully configured for ${student.name}!`,
+      data: savedStructure
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Get detailed student fee profile (Summary + Month-wise grid + Payments history)
+// @route   GET /api/admin/fees/student-profile/:studentId
+router.get('/fees/student-profile/:studentId', async (req, res) => {
+  const { studentId } = req.params;
+  try {
+    let student = null;
+    let structure = null;
+    let fees = [];
+    let receipts = [];
+
+    if (mockStore.isMock) {
+      student = await mockStore.findById('students', studentId);
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      structure = await mockStore.findOne('studentFeeStructures', { studentId });
+      const allFees = await mockStore.find('fees');
+      fees = allFees.filter(f => String(f.studentId) === String(studentId));
+      const allReceipts = await mockStore.find('receipts');
+      receipts = allReceipts.filter(r => String(r.studentId) === String(studentId));
+    } else {
+      student = await Student.findById(studentId).populate('parentId', 'name email phone address');
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      structure = await StudentFeeStructure.findOne({ studentId }).lean();
+      fees = await Fee.find({ studentId }).sort({ dueDate: 1 }).lean();
+      receipts = await Receipt.find({ studentId }).sort({ paymentDate: -1 }).lean();
+    }
+
+    // Sort fees chronologically
+    fees.sort((a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0));
+
+    // Calculate totals across all active/valid fee records
+    let totalPayable = 0;
+    let totalPaid = 0;
+    let totalDiscount = 0;
+    let totalFine = 0;
+    let totalOutstanding = 0;
+
+    const monthlyBreakdown = fees.map(f => {
+      const isCancelled = f.status === 'cancelled';
+      const grossAmount = Number(f.amount || 0);
+      const discount = Number(f.discountAmount || 0);
+      const fine = Number(f.fineAmount || 0);
+      const netCalculatedPayable = Math.max(0, grossAmount - discount + fine);
+      const paid = Number(f.paidAmount || 0);
+      const due = isCancelled ? 0 : Math.max(0, netCalculatedPayable - paid);
+
+      if (!isCancelled) {
+        totalPayable += netCalculatedPayable;
+        totalPaid += paid;
+        totalDiscount += discount;
+        totalFine += fine;
+        totalOutstanding += due;
+      }
+
+      return {
+        _id: f._id,
+        term: f.term || (f.month ? `${f.month} ${f.year || 2026} Fee` : 'Fee Item'),
+        feeType: f.feeType || 'monthly',
+        month: f.month || '',
+        year: f.year || 2026,
+        dueDate: f.dueDate,
+        grossFee: grossAmount,
+        discount,
+        discountReason: f.discountReason || '',
+        fine,
+        fineReason: f.fineReason || '',
+        totalPayable: netCalculatedPayable,
+        paid,
+        due,
+        status: f.status,
+        paymentDate: f.paymentDate,
+        transactionId: f.transactionId,
+        paymentMethod: f.paymentMethod
+      };
+    });
+
+    res.json({
+      success: true,
+      student,
+      structure,
+      summary: {
+        totalPayable,
+        totalPaid,
+        totalDiscount,
+        totalFine,
+        totalOutstanding
+      },
+      monthlyBreakdown,
+      paymentHistory: receipts.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Generate or adjust month fee for an individual student (preserves historic records)
+// @route   POST /api/admin/fees/student/:studentId/monthly-fee
+router.post('/fees/student/:studentId/monthly-fee', async (req, res) => {
+  const { studentId } = req.params;
+  const { month, year, feeAmount, discountAmount, discountReason, fineAmount, fineReason, dueDate, forceOverwrite } = req.body;
+
+  if (!month) return res.status(400).json({ success: false, message: 'Please specify the month' });
+  const numYear = Number(year) || new Date().getFullYear();
+  const numAmount = Number(feeAmount);
+  if (isNaN(numAmount) || numAmount < 0) {
+    return res.status(400).json({ success: false, message: 'Please provide a valid fee amount' });
+  }
+
+  try {
+    let student = null;
+    let existingInvoice = null;
+
+    if (mockStore.isMock) {
+      student = await mockStore.findById('students', studentId);
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      const allFees = await mockStore.find('fees');
+      existingInvoice = allFees.find(f => 
+        String(f.studentId) === String(studentId) && 
+        f.month === month && 
+        Number(f.year) === numYear && 
+        f.status !== 'cancelled'
+      );
+    } else {
+      student = await Student.findById(studentId);
+      if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+      existingInvoice = await Fee.findOne({
+        studentId,
+        month,
+        year: numYear,
+        status: { $ne: 'cancelled' }
+      });
+    }
+
+    // Historical record protection: if already paid or partially paid, do not overwrite unless forceOverwrite explicitly approved
+    if (existingInvoice && (existingInvoice.status === 'paid' || existingInvoice.paidAmount > 0) && !forceOverwrite) {
+      return res.status(400).json({
+        success: false,
+        message: `Historical payment exists for ${month} ${numYear} (Paid: ₹${existingInvoice.paidAmount}). Changing current monthly rate must not modify historical settled transactions. Set forceOverwrite=true only if specifically authorized.`
+      });
+    }
+
+    const numDiscount = Number(discountAmount) || 0;
+    const numFine = Number(fineAmount) || 0;
+    const netTotal = Math.max(0, numAmount - numDiscount + numFine);
+    const parsedDueDate = dueDate ? new Date(dueDate) : new Date(`${month} 15, ${numYear}`);
+
+    let resultInvoice = null;
+    if (existingInvoice) {
+      // Update existing unpaid or pending invoice
+      const updatedFields = {
+        amount: numAmount,
+        term: `${month} ${numYear} Monthly Fee (${student.class})`,
+        discountAmount: numDiscount,
+        discountReason: discountReason || '',
+        fineAmount: numFine,
+        fineReason: fineReason || '',
+        totalPayable: netTotal,
+        remainingAmount: Math.max(0, netTotal - (existingInvoice.paidAmount || 0)),
+        dueDate: isNaN(parsedDueDate.getTime()) ? existingInvoice.dueDate : parsedDueDate
+      };
+
+      if (mockStore.isMock) {
+        resultInvoice = await mockStore.findByIdAndUpdate('fees', existingInvoice._id, updatedFields);
+      } else {
+        Object.assign(existingInvoice, updatedFields);
+        resultInvoice = await existingInvoice.save();
+      }
+    } else {
+      // Create new month invoice
+      const newInvoiceData = {
+        studentId,
+        amount: numAmount,
+        term: `${month} ${numYear} Monthly Fee (${student.class})`,
+        feeType: 'monthly',
+        month,
+        year: numYear,
+        dueDate: isNaN(parsedDueDate.getTime()) ? new Date() : parsedDueDate,
+        discountAmount: numDiscount,
+        discountReason: discountReason || '',
+        fineAmount: numFine,
+        fineReason: fineReason || '',
+        totalPayable: netTotal,
+        paidAmount: 0,
+        remainingAmount: netTotal,
+        previousDue: 0,
+        status: 'pending'
+      };
+
+      if (mockStore.isMock) {
+        resultInvoice = await mockStore.create('fees', newInvoiceData);
+      } else {
+        resultInvoice = await Fee.create(newInvoiceData);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Monthly fee for ${month} ${numYear} configured successfully!`,
+      data: resultInvoice
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Universal payment record (Supports full, partial, multiple payments, advance, overdue settlement)
+// @route   POST /api/admin/fees/record-payment
+router.post('/fees/record-payment', async (req, res) => {
+  const {
+    studentId,
+    feeId,
+    paymentAmount,
+    paymentMethod,
+    discountApplied,
+    fineApplied,
+    month,
+    year,
+    feeType,
+    remarks,
+    adminName
+  } = req.body;
+
+  const payAmt = Number(paymentAmount);
+  if (isNaN(payAmt) || payAmt <= 0) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid positive payment amount' });
+  }
+
+  const txnId = `TXN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const rcpNumber = `REC-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+  const method = paymentMethod || 'Admission Desk Cash';
+  const now = new Date();
+
+  try {
+    let student = null;
+    let targetFee = null;
+
+    if (mockStore.isMock) {
+      if (studentId) {
+        student = await mockStore.findById('students', studentId);
+      }
+      if (feeId) {
+        targetFee = await mockStore.findById('fees', feeId);
+        if (!student && targetFee) {
+          student = await mockStore.findById('students', targetFee.studentId);
+        }
+      } else if (studentId) {
+        // Find earliest unpaid or partially paid invoice for student
+        const allFees = await mockStore.find('fees');
+        const studentFees = allFees
+          .filter(f => String(f.studentId) === String(studentId) && f.status !== 'paid' && f.status !== 'cancelled')
+          .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+        targetFee = studentFees[0];
+      }
+    } else {
+      if (studentId) {
+        student = await Student.findById(studentId);
+      }
+      if (feeId) {
+        targetFee = await Fee.findById(feeId);
+        if (!student && targetFee) {
+          student = await Student.findById(targetFee.studentId);
+        }
+      } else if (studentId) {
+        targetFee = await Fee.findOne({
+          studentId,
+          status: { $in: ['pending', 'partially_paid', 'overdue'] }
+        }).sort({ dueDate: 1 });
+      }
+    }
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student record not found' });
+    }
+
+    // If no existing invoice found, this is an advance or on-demand payment invoice
+    if (!targetFee) {
+      const targetMonth = month || MONTH_NAMES[now.getMonth()];
+      const targetYear = Number(year) || now.getFullYear();
+      const newInvData = {
+        studentId: student._id,
+        amount: payAmt,
+        term: `${targetMonth} ${targetYear} Fee / Advance Payment`,
+        feeType: feeType || 'advance',
+        month: targetMonth,
+        year: targetYear,
+        dueDate: now,
+        discountAmount: Number(discountApplied) || 0,
+        fineAmount: Number(fineApplied) || 0,
+        totalPayable: payAmt,
+        paidAmount: payAmt,
+        remainingAmount: 0,
+        previousDue: 0,
+        status: 'paid',
+        paymentDate: now,
+        transactionId: txnId,
+        paymentMethod: method
+      };
+
+      if (mockStore.isMock) {
+        targetFee = await mockStore.create('fees', newInvData);
+      } else {
+        targetFee = await Fee.create(newInvData);
+      }
+    } else {
+      // Apply discount & fine if provided
+      if (discountApplied !== undefined) {
+        targetFee.discountAmount = Number(discountApplied) || 0;
+      }
+      if (fineApplied !== undefined) {
+        targetFee.fineAmount = Number(fineApplied) || 0;
+      }
+
+      const gross = Number(targetFee.amount || 0);
+      const disc = Number(targetFee.discountAmount || 0);
+      const fn = Number(targetFee.fineAmount || 0);
+      const netPayable = Math.max(0, gross - disc + fn);
+      targetFee.totalPayable = netPayable;
+
+      const currentPaid = Number(targetFee.paidAmount || 0);
+      const newPaid = currentPaid + payAmt;
+      const remaining = Math.max(0, netPayable - newPaid);
+      const isFullySettled = remaining === 0;
+
+      const installments = targetFee.installments || [];
+      installments.push({
+        amount: payAmt,
+        date: now,
+        method,
+        transactionId: txnId,
+        receiptNumber: rcpNumber
+      });
+
+      const updatedFields = {
+        paidAmount: newPaid,
+        remainingAmount: remaining,
+        status: isFullySettled ? 'paid' : 'partially_paid',
+        paymentDate: now,
+        transactionId: txnId,
+        paymentMethod: method,
+        installments
+      };
+
+      if (mockStore.isMock) {
+        targetFee = await mockStore.findByIdAndUpdate('fees', targetFee._id, updatedFields);
+      } else {
+        Object.assign(targetFee, updatedFields);
+        await targetFee.save();
+      }
+    }
+
+    // Create immutable receipt / payment record
+    const receiptData = {
+      feeId: targetFee._id,
+      studentId: student._id,
+      receiptNumber: rcpNumber,
+      amountPaid: payAmt,
+      feeType: targetFee.feeType || 'monthly',
+      month: targetFee.month || '',
+      amountDue: targetFee.totalPayable || targetFee.amount,
+      discount: targetFee.discountAmount || 0,
+      fine: targetFee.fineAmount || 0,
+      remainingAmount: targetFee.remainingAmount || 0,
+      paymentMethod: method,
+      paymentDate: now,
+      transactionId: txnId,
+      status: 'completed',
+      createdByAdmin: adminName || 'Admin Desk',
+      remarks: remarks || 'Payment recorded via Admin Fee Desk'
+    };
+
+    let receipt = null;
+    if (mockStore.isMock) {
+      receipt = await mockStore.create('receipts', receiptData);
+    } else {
+      receipt = await Receipt.create(receiptData);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Payment of ₹${payAmt.toLocaleString('en-IN')} recorded successfully! Receipt generated: ${rcpNumber}`,
+      fee: targetFee,
+      receipt,
+      student: { name: student.name, studentId: student.studentId, class: student.class }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Cancel / reverse a payment transaction (maintains audit trail without hard deletion)
+// @route   POST /api/admin/fees/receipts/:id/cancel
+router.post('/fees/receipts/:id/cancel', async (req, res) => {
+  const { reason, adminName } = req.body;
+  try {
+    let receipt = null;
+    let fee = null;
+
+    if (mockStore.isMock) {
+      receipt = await mockStore.findById('receipts', req.params.id);
+      if (!receipt) return res.status(404).json({ success: false, message: 'Receipt not found' });
+      if (receipt.status === 'cancelled') {
+        return res.status(400).json({ success: false, message: 'This receipt has already been reversed' });
+      }
+
+      fee = await mockStore.findById('fees', receipt.feeId);
+      await mockStore.findByIdAndUpdate('receipts', receipt._id, {
+        status: 'cancelled',
+        remarks: `REVERSED by ${adminName || 'Admin'}: ${reason || 'Transaction cancelled'}`
+      });
+
+      if (fee) {
+        const revisedPaid = Math.max(0, (fee.paidAmount || 0) - receipt.amountPaid);
+        const netPayable = fee.totalPayable || fee.amount;
+        await mockStore.findByIdAndUpdate('fees', fee._id, {
+          paidAmount: revisedPaid,
+          remainingAmount: Math.max(0, netPayable - revisedPaid),
+          status: revisedPaid === 0 ? 'pending' : 'partially_paid'
+        });
+      }
+    } else {
+      receipt = await Receipt.findById(req.params.id);
+      if (!receipt) return res.status(404).json({ success: false, message: 'Receipt not found' });
+      if (receipt.status === 'cancelled') {
+        return res.status(400).json({ success: false, message: 'This receipt has already been reversed' });
+      }
+
+      fee = await Fee.findById(receipt.feeId);
+      receipt.status = 'cancelled';
+      receipt.remarks = `REVERSED by ${adminName || 'Admin'}: ${reason || 'Transaction cancelled'}`;
+      await receipt.save();
+
+      if (fee) {
+        const revisedPaid = Math.max(0, (fee.paidAmount || 0) - receipt.amountPaid);
+        const netPayable = fee.totalPayable || fee.amount;
+        fee.paidAmount = revisedPaid;
+        fee.remainingAmount = Math.max(0, netPayable - revisedPaid);
+        fee.status = revisedPaid === 0 ? 'pending' : 'partially_paid';
+        await fee.save();
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Transaction ${receipt.receiptNumber} successfully cancelled and reversed. Audit trail updated.`,
+      receipt
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Enhanced Fee Dashboard KPIs & Chart Aggregations
+// @route   GET /api/admin/fees/dashboard-stats
+router.get('/fees/dashboard-stats', async (req, res) => {
+  try {
+    let allFees = [];
+    let allReceipts = [];
+    let allStudents = [];
+
+    if (mockStore.isMock) {
+      allFees = await mockStore.find('fees');
+      allReceipts = await mockStore.find('receipts');
+      allStudents = await mockStore.find('students');
+    } else {
+      allFees = await Fee.find().lean();
+      allReceipts = await Receipt.find({ status: { $ne: 'cancelled' } }).lean();
+      allStudents = await Student.find().lean();
+    }
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const currentMonthIndex = now.getMonth();
+    const currentMonthName = MONTH_NAMES[currentMonthIndex];
+    const currentYear = now.getFullYear();
+
+    // 1. Core KPIs
+    let totalFees = 0;
+    let totalCollected = 0;
+    let totalPending = 0;
+    let totalOverdue = 0;
+    const pendingStudentIds = new Set();
+    const overdueStudentIds = new Set();
+
+    allFees.forEach(f => {
+      if (f.status === 'cancelled') return;
+      const netPayable = f.totalPayable !== undefined ? Number(f.totalPayable) : Number(f.amount || 0);
+      const paid = Number(f.paidAmount || (f.status === 'paid' ? f.amount : 0));
+      const remaining = Math.max(0, netPayable - paid);
+
+      totalFees += netPayable;
+      totalCollected += paid;
+
+      if (remaining > 0) {
+        totalPending += remaining;
+        pendingStudentIds.add(String(f.studentId));
+
+        const dueDate = new Date(f.dueDate);
+        if (dueDate < now || f.status === 'overdue') {
+          totalOverdue += remaining;
+          overdueStudentIds.add(String(f.studentId));
+        }
+      }
+    });
+
+    // 2. Today's Collection
+    let todayCollection = 0;
+    let thisMonthCollection = 0;
+
+    allReceipts.forEach(r => {
+      if (r.status === 'cancelled') return;
+      const pDate = new Date(r.paymentDate || r.createdAt);
+      if (pDate.toISOString().slice(0, 10) === todayStr) {
+        todayCollection += Number(r.amountPaid || 0);
+      }
+      if (pDate.getMonth() === currentMonthIndex && pDate.getFullYear() === currentYear) {
+        thisMonthCollection += Number(r.amountPaid || 0);
+      }
+    });
+
+    // 3. Current Month Expected Collection
+    let currentMonthExpected = 0;
+    allFees.forEach(f => {
+      if (f.status === 'cancelled') return;
+      const d = new Date(f.dueDate);
+      if (d.getMonth() === currentMonthIndex && d.getFullYear() === currentYear) {
+        currentMonthExpected += Number(f.totalPayable !== undefined ? f.totalPayable : f.amount);
+      }
+    });
+
+    // 4. Monthly Collection Trends (Last 6 Months)
+    const monthlyTrends = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mIdx = d.getMonth();
+      const yVal = d.getFullYear();
+      const mLabel = `${MONTH_NAMES[mIdx].slice(0, 3)} ${yVal}`;
+
+      let collectedAmt = 0;
+      allReceipts.forEach(r => {
+        if (r.status === 'cancelled') return;
+        const rd = new Date(r.paymentDate || r.createdAt);
+        if (rd.getMonth() === mIdx && rd.getFullYear() === yVal) {
+          collectedAmt += Number(r.amountPaid || 0);
+        }
+      });
+
+      let invoicedAmt = 0;
+      allFees.forEach(f => {
+        if (f.status === 'cancelled') return;
+        const fd = new Date(f.dueDate);
+        if (fd.getMonth() === mIdx && fd.getFullYear() === yVal) {
+          invoicedAmt += Number(f.totalPayable !== undefined ? f.totalPayable : f.amount);
+        }
+      });
+
+      monthlyTrends.push({
+        month: mLabel,
+        invoiced: invoicedAmt,
+        collected: collectedAmt
+      });
+    }
+
+    // 5. Course-wise / Class-wise Collection
+    const classMap = {};
+    allStudents.forEach(s => {
+      classMap[String(s._id)] = s.class || 'Other';
+    });
+
+    const courseCollectionMap = {};
+    allFees.forEach(f => {
+      if (f.status === 'cancelled') return;
+      const className = classMap[String(f.studentId)] || 'General';
+      if (!courseCollectionMap[className]) {
+        courseCollectionMap[className] = { class: className, totalInvoiced: 0, collected: 0, pending: 0 };
+      }
+      const net = f.totalPayable !== undefined ? Number(f.totalPayable) : Number(f.amount || 0);
+      const pd = Number(f.paidAmount || (f.status === 'paid' ? f.amount : 0));
+      courseCollectionMap[className].totalInvoiced += net;
+      courseCollectionMap[className].collected += pd;
+      courseCollectionMap[className].pending += Math.max(0, net - pd);
+    });
+
+    res.json({
+      success: true,
+      kpis: {
+        totalFees,
+        totalCollected,
+        totalPending,
+        totalOverdue,
+        todayCollection,
+        thisMonthCollection,
+        currentMonthExpected,
+        studentsWithPendingFees: pendingStudentIds.size,
+        studentsWithOverdueFees: overdueStudentIds.size
+      },
+      charts: {
+        monthlyTrends,
+        pendingVsCollected: {
+          collected: totalCollected,
+          pending: totalPending,
+          overdue: totalOverdue
+        },
+        courseWiseCollection: Object.values(courseCollectionMap)
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
