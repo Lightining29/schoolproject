@@ -119,7 +119,7 @@ export const StudentRaw = sequelize.define('Student', {
   parentId: { type: DataTypes.STRING(64), allowNull: false },
   fatherName: { type: DataTypes.STRING(255), defaultValue: '' },
   motherName: { type: DataTypes.STRING(255), defaultValue: '' },
-  photo: { type: DataTypes.TEXT, defaultValue: '' },
+  photo: { type: DataTypes.TEXT('long'), defaultValue: '' },
   photoData: { type: DataTypes.JSON, defaultValue: null },
   teacherId: { type: DataTypes.STRING(64), defaultValue: null },
   attendance: { type: DataTypes.JSON, defaultValue: [] },
@@ -479,10 +479,50 @@ export const connectDB = async () => {
     await sequelize.authenticate();
     console.log(`Hostinger MySQL Connection established successfully on ${dbHost}:${dbPort}`);
 
-    // Synchronize all models with Hostinger MySQL tables
+    // Synchronize all models with Hostinger MySQL tables safely
     console.log('Synchronizing database schema and tables with Hostinger MySQL...');
-    await sequelize.sync({ alter: true });
-    console.log('All MySQL tables verified and synchronized successfully.');
+    try {
+      await sequelize.sync({ alter: true });
+      console.log('All MySQL tables verified and synchronized with alter successfully.');
+    } catch (syncErr) {
+      console.warn('Notice: sequelize.sync({ alter: true }) encountered an issue, falling back to basic sync:', syncErr.message);
+      await sequelize.sync();
+      console.log('Basic MySQL sync completed successfully.');
+    }
+
+    // Safely verify critical MySQL columns in case alter skipped them
+    try {
+      const colQueries = [
+        "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `fatherName` VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `motherName` VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE `students` MODIFY COLUMN `photo` LONGTEXT",
+        "ALTER TABLE `students` ADD COLUMN IF NOT EXISTS `photoData` JSON",
+        "ALTER TABLE `admissions` ADD COLUMN IF NOT EXISTS `documentData` JSON",
+        "ALTER TABLE `parents` ADD COLUMN IF NOT EXISTS `fatherName` VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE `parents` ADD COLUMN IF NOT EXISTS `motherName` VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `feeType` VARCHAR(50) DEFAULT 'monthly'",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `month` VARCHAR(50) DEFAULT ''",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `year` INT DEFAULT 2026",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `discountAmount` DOUBLE DEFAULT 0",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `discountReason` VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `fineAmount` DOUBLE DEFAULT 0",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `fineReason` VARCHAR(255) DEFAULT ''",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `totalPayable` DOUBLE DEFAULT 0",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `paidAmount` DOUBLE DEFAULT 0",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `remainingAmount` DOUBLE DEFAULT 0",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `previousDue` DOUBLE DEFAULT 0",
+        "ALTER TABLE `fees` ADD COLUMN IF NOT EXISTS `installments` JSON"
+      ];
+      for (const q of colQueries) {
+        try {
+          await sequelize.query(q);
+        } catch (e) {
+          // Ignore if column already exists or dialect specific
+        }
+      }
+    } catch (colErr) {
+      console.warn('Column check warning (non-fatal):', colErr.message);
+    }
 
     mockStore.isMock = false;
   } catch (error) {

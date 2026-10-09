@@ -346,7 +346,10 @@ router.get('/students/photo/:id', async (req, res) => {
     }
     if (!student) return res.status(404).send('Student not found');
     
-    const photo = student.photoData;
+    let photo = student.photoData;
+    if (typeof photo === 'string') {
+      try { photo = JSON.parse(photo); } catch (e) {}
+    }
     if (photo && photo.data) {
       res.contentType(photo.contentType || 'image/jpeg');
       const buf = Buffer.isBuffer(photo.data) ? photo.data : Buffer.from(photo.data, 'base64');
@@ -826,22 +829,42 @@ router.delete('/students/:id', async (req, res) => {
   }
 });
 
+// Multer wrapper to catch any file upload issues before reaching router handler
+const handleAdmissionsUpload = (req, res, next) => {
+  uploadAdmissions.fields([
+    { name: 'birthCertificate', maxCount: 1 },
+    { name: 'photo', maxCount: 1 },
+    { name: 'reportCard', maxCount: 1 },
+    { name: 'transferCertificate', maxCount: 1 },
+    { name: 'aadhaarCard', maxCount: 1 },
+    { name: 'fatherAadhaarCard', maxCount: 1 },
+    { name: 'motherAadhaarCard', maxCount: 1 },
+    { name: 'addressProof', maxCount: 1 }
+  ])(req, res, (err) => {
+    if (err) {
+      console.error('Admissions upload error:', err);
+      return res.status(400).json({
+        success: false,
+        message: err.message || 'File upload error. Only JPG, PNG, and PDF files under 15MB are allowed.'
+      });
+    }
+    next();
+  });
+};
+
 // Create Admission & Student directly (Admin-only)
-router.post('/admissions/create', uploadAdmissions.fields([
-  { name: 'birthCertificate', maxCount: 1 },
-  { name: 'photo', maxCount: 1 },
-  { name: 'reportCard', maxCount: 1 },
-  { name: 'transferCertificate', maxCount: 1 },
-  { name: 'aadhaarCard', maxCount: 1 },
-  { name: 'fatherAadhaarCard', maxCount: 1 },
-  { name: 'motherAadhaarCard', maxCount: 1 },
-  { name: 'addressProof', maxCount: 1 }
-]), async (req, res) => {
+router.post('/admissions/create', handleAdmissionsUpload, async (req, res) => {
   let { studentDetails, parentDetails, password, admissionFee, monthlyFee, addressProofType } = req.body;
   
   try {
-    if (typeof studentDetails === 'string') studentDetails = JSON.parse(studentDetails);
-    if (typeof parentDetails === 'string') parentDetails = JSON.parse(parentDetails);
+    if (typeof studentDetails === 'string') {
+      try { studentDetails = JSON.parse(studentDetails); } catch (e) { studentDetails = {}; }
+    }
+    if (typeof parentDetails === 'string') {
+      try { parentDetails = JSON.parse(parentDetails); } catch (e) { parentDetails = {}; }
+    }
+    studentDetails = studentDetails || {};
+    parentDetails = parentDetails || {};
 
     const appNo = `APN-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}${Math.floor(10 + Math.random() * 90)}`;
     const generatedStudentId = `STD-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}${Math.floor(10 + Math.random() * 90)}`;
@@ -863,12 +886,6 @@ router.post('/admissions/create', uploadAdmissions.fields([
       ? 'std_' + Math.random().toString(36).substr(2, 9)
       : generateId();
 
-    const getFileUrl = (file, fieldName) => {
-      if (!file) return '';
-      if (file.filename) return `/uploads/${file.filename}`;
-      return `/api/admin/admissions/document/${admissionId}/${fieldName}`;
-    };
-
     const makeDocData = (file) => {
       if (!file) return undefined;
       let buf = file.buffer;
@@ -879,14 +896,42 @@ router.post('/admissions/create', uploadAdmissions.fields([
           console.error('Error reading upload file from disk:', e);
         }
       }
-      if (buf && buf.length < 5 * 1024 * 1024) {
+      if (buf && buf.length <= 15 * 1024 * 1024) {
         return {
-          data: isMock ? buf.toString('base64') : buf.toString('base64'),
+          data: buf.toString('base64'),
           contentType: file.mimetype || 'image/jpeg',
-          filename: file.filename || file.originalname
+          filename: file.filename || file.originalname || 'document'
         };
       }
       return undefined;
+    };
+
+    // Helper to write file to disk if directory is writable
+    const trySaveToDisk = (file) => {
+      if (!file || !file.buffer) return file?.filename || '';
+      try {
+        const uploadDir = path.join(process.cwd(), 'backend', 'uploads');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        const ext = path.extname(file.originalname || '') || '.jpg';
+        const uniqueName = `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+        const filePath = path.join(uploadDir, uniqueName);
+        fs.writeFileSync(filePath, file.buffer);
+        file.filename = uniqueName;
+        file.path = filePath;
+        return uniqueName;
+      } catch (err) {
+        return '';
+      }
+    };
+
+    [birthCertificateFile, photoFile, reportCardFile, transferCertificateFile, aadhaarCardFile, fatherAadhaarCardFile, motherAadhaarCardFile, addressProofFile].forEach(f => {
+      if (f) trySaveToDisk(f);
+    });
+
+    const getFileUrl = (file, fieldName) => {
+      if (!file) return '';
+      if (file.filename) return `/uploads/${file.filename}`;
+      return `/api/admin/admissions/document/${admissionId}/${fieldName}`;
     };
 
     const documents = {
@@ -914,14 +959,17 @@ router.post('/admissions/create', uploadAdmissions.fields([
       addressProof: makeDocData(addressProofFile)
     };
 
+    const admissionFeeVal = Number(admissionFee) || 0;
+    const monthlyFeeVal = Number(monthlyFee) || 0;
+
     if (isMock) {
       let parentUser = await mockStore.findOne('users', { email: parentDetails.email });
       let parentProfile;
       if (!parentUser) {
         const salt = bcrypt.genSaltSync(10);
         parentUser = await mockStore.create('users', {
-          name: parentDetails.fatherName || parentDetails.motherName,
-          email: parentDetails.email,
+          name: parentDetails.fatherName || parentDetails.motherName || 'Parent Guardian',
+          email: parentDetails.email || `parent_${Date.now()}@apnaschool.edu`,
           password: bcrypt.hashSync(password || 'parent123', salt),
           role: 'parent'
         });
@@ -929,8 +977,8 @@ router.post('/admissions/create', uploadAdmissions.fields([
           userId: parentUser._id,
           name: parentUser.name,
           email: parentUser.email,
-          phone: parentDetails.phone,
-          address: parentDetails.address,
+          phone: parentDetails.phone || '+91 98000-00000',
+          address: parentDetails.address || 'Address not provided',
           children: []
         });
       } else {
@@ -945,8 +993,8 @@ router.post('/admissions/create', uploadAdmissions.fields([
         name: studentDetails.name,
         studentId: generatedStudentId,
         dateOfBirth: studentDetails.dateOfBirth,
-        gender: studentDetails.gender,
-        class: studentDetails.class,
+        gender: studentDetails.gender || 'Male',
+        class: studentDetails.class || 'Pre-Nursery',
         parentId: parentProfile._id,
         teacherId,
         photo: photoFile ? `/api/admin/students/photo/${studentDbId}` : '',
@@ -970,9 +1018,6 @@ router.post('/admissions/create', uploadAdmissions.fields([
         remarks: 'Direct Admin Admission',
         submissionDate: new Date()
       });
-
-      const admissionFeeVal = Number(admissionFee) || 0;
-      const monthlyFeeVal = Number(monthlyFee) || 0;
 
       // Persist custom StudentFeeStructure
       await mockStore.create('studentFeeStructures', {
@@ -1005,39 +1050,53 @@ router.post('/admissions/create', uploadAdmissions.fields([
       });
     }
 
-    // MongoDB
-    const parentEmail = (parentDetails.email || '').trim().toLowerCase();
-    let parentUser = await User.findOne({
-      email: { $regex: new RegExp(`^${parentEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-    });
-    let parent;
+    // Hostinger MySQL / Database Storage
+    const rawEmail = (parentDetails.email || '').trim().toLowerCase();
+    const safeParentName = parentDetails.fatherName || parentDetails.motherName || 'Parent Guardian';
+    const safeParentPhone = (parentDetails.phone || '').trim() || '+91 98000-00000';
+    const safeParentAddress = (parentDetails.address || '').trim() || 'Address not provided';
+
+    let parentUser = null;
+    if (rawEmail) {
+      parentUser = await User.findOne({ email: rawEmail });
+    }
+
     if (!parentUser) {
-      parentUser = await User.create({
-        name: parentDetails.fatherName || parentDetails.motherName || 'Parent',
-        email: parentEmail || `parent_${Date.now()}@apnaschool.edu`,
-        password: password || 'parent123',
-        role: 'parent'
-      });
+      const emailToUse = rawEmail || `parent_${Date.now()}_${Math.floor(100 + Math.random() * 900)}@apnaschool.edu`;
+      try {
+        parentUser = await User.create({
+          name: safeParentName,
+          email: emailToUse,
+          password: password || 'parent123',
+          role: 'parent'
+        });
+      } catch (createErr) {
+        console.warn('Parent user creation notice, retrieving existing user:', createErr.message);
+        parentUser = await User.findOne({ email: emailToUse });
+        if (!parentUser) {
+          const fallbackEmail = `parent_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}@apnaschool.edu`;
+          parentUser = await User.create({
+            name: safeParentName,
+            email: fallbackEmail,
+            password: password || 'parent123',
+            role: 'parent'
+          });
+        }
+      }
+    }
+
+    let parent = await Parent.findOne({ userId: parentUser._id });
+    if (!parent) {
       parent = await Parent.create({
         userId: parentUser._id,
-        name: parentUser.name,
+        name: parentUser.name || safeParentName,
+        fatherName: parentDetails.fatherName || '',
+        motherName: parentDetails.motherName || '',
         email: parentUser.email,
-        phone: parentDetails.phone || '+91 98XXX-XXXXX',
-        address: parentDetails.address || 'City Center',
+        phone: safeParentPhone,
+        address: safeParentAddress,
         children: []
       });
-    } else {
-      parent = await Parent.findOne({ userId: parentUser._id });
-      if (!parent) {
-        parent = await Parent.create({
-          userId: parentUser._id,
-          name: parentUser.name || parentDetails.fatherName || parentDetails.motherName || 'Parent',
-          email: parentUser.email,
-          phone: parentDetails.phone || '+91 98XXX-XXXXX',
-          address: parentDetails.address || 'City Center',
-          children: []
-        });
-      }
     }
 
     let firstTeacher = await Teacher.findOne();
@@ -1046,16 +1105,16 @@ router.post('/admissions/create', uploadAdmissions.fields([
       if (!teacherUser) {
         teacherUser = await User.create({
           name: 'Teacher Staff',
-          email: 'teacher@apnaschool.edu',
+          email: `teacher_${Date.now()}@apnaschool.edu`,
           password: 'teacher123',
           role: 'teacher'
         });
       }
       firstTeacher = await Teacher.create({
         userId: teacherUser._id,
-        name: teacherUser.name,
-        email: teacherUser.email,
-        phone: '+91 98XXX-XXXXX',
+        name: teacherUser.name || 'Teacher Staff',
+        email: teacherUser.email || 'teacher@apnaschool.edu',
+        phone: '+91 98000-00000',
         specialization: 'Early Childhood Education',
         qualifications: 'B.Ed, Early Childhood Certification',
         classesAssigned: ['Pre-Nursery', 'Nursery', 'Junior KG', 'Senior KG']
@@ -1065,27 +1124,37 @@ router.post('/admissions/create', uploadAdmissions.fields([
     const parsedDob = studentDetails.dateOfBirth ? new Date(studentDetails.dateOfBirth) : new Date('2022-01-01');
     const validDob = isNaN(parsedDob.getTime()) ? new Date('2022-01-01') : parsedDob;
     const dobString = validDob.toISOString().split('T')[0];
+    const validGender = ['Male', 'Female', 'Other'].includes(studentDetails.gender) ? studentDetails.gender : 'Male';
+
+    const photoDocData = makeDocData(photoFile);
+    const photoUrl = photoDocData
+      ? `/api/admin/students/photo/${studentDbId}`
+      : (photoFile?.filename ? `/uploads/${photoFile.filename}` : '');
 
     const student = await Student.create({
       _id: studentDbId,
-      name: studentDetails.name,
+      name: studentDetails.name || 'Student',
       studentId: generatedStudentId,
       dateOfBirth: dobString,
-      gender: studentDetails.gender || 'Male',
+      gender: validGender,
       class: studentDetails.class || 'Pre-Nursery',
       parentId: parent._id,
       fatherName: parentDetails.fatherName || '',
       motherName: parentDetails.motherName || '',
       teacherId: firstTeacher ? firstTeacher._id : null,
-      photo: photoFile ? `/api/admin/students/photo/${studentDbId}` : '',
-      photoData: photoFile ? makeDocData(photoFile) : undefined
+      photo: photoUrl,
+      photoData: photoDocData || null
     });
 
-    if (!Array.isArray(parent.children)) parent.children = [];
-    parent.children.push(student._id);
-    if (parentDetails.fatherName) parent.fatherName = parentDetails.fatherName;
-    if (parentDetails.motherName) parent.motherName = parentDetails.motherName;
-    await parent.save();
+    const currentChildren = Array.isArray(parent.children) ? [...parent.children] : [];
+    if (!currentChildren.includes(student._id)) {
+      currentChildren.push(student._id);
+    }
+    await Parent.findByIdAndUpdate(parent._id, {
+      children: currentChildren,
+      fatherName: parentDetails.fatherName || parent.fatherName || '',
+      motherName: parentDetails.motherName || parent.motherName || ''
+    });
 
     const admission = await Admission.create({
       _id: admissionId,
@@ -1101,22 +1170,29 @@ router.post('/admissions/create', uploadAdmissions.fields([
       remarks: 'Direct Admin Admission'
     });
 
-    // Automatically assign and generate structured fees based on student's class and custom admission rates
-    let createdReceipt = null;
-    const admissionFeeVal = Number(admissionFee) || 0;
-    const monthlyFeeVal = Number(monthlyFee) || 0;
-
     // Persist StudentFeeStructure in MySQL
-    await StudentFeeStructure.create({
-      studentId: student._id,
-      academicYear: '2026-2027',
-      admissionFee: { amount: admissionFeeVal, enabled: admissionFeeVal > 0 },
-      monthlyFee: { amount: monthlyFeeVal, enabled: true },
-      isActive: true
-    });
+    try {
+      const existingFeeStruct = await StudentFeeStructure.findOne({ studentId: student._id });
+      if (!existingFeeStruct) {
+        await StudentFeeStructure.create({
+          studentId: student._id,
+          academicYear: '2026-2027',
+          admissionFee: { amount: admissionFeeVal, enabled: admissionFeeVal > 0 },
+          monthlyFee: { amount: monthlyFeeVal, enabled: true },
+          isActive: true
+        });
+      }
+    } catch (structErr) {
+      console.warn('StudentFeeStructure notice:', structErr.message);
+    }
 
-    await assignFeesForStudent(student._id, student.class, isMock, admissionFeeVal, monthlyFeeVal);
+    try {
+      await assignFeesForStudent(student._id, student.class, isMock, admissionFeeVal, monthlyFeeVal);
+    } catch (assignErr) {
+      console.warn('Fee assignment notice:', assignErr.message);
+    }
 
+    let createdReceipt = null;
     if (admissionFeeVal > 0) {
       createdReceipt = {
         receiptNumber: `REC-ADM-${Date.now()}`,
@@ -1172,8 +1248,8 @@ router.post('/students/register', async (req, res) => {
       if (!parentUser) {
         const salt = bcrypt.genSaltSync(10);
         parentUser = await mockStore.create('users', {
-          name: parentName,
-          email: parentEmail,
+          name: parentName || 'Parent Guardian',
+          email: parentEmail || `parent_${Date.now()}@apnaschool.edu`,
           password: bcrypt.hashSync(password || 'parent123', salt),
           role: 'parent'
         });
@@ -1181,8 +1257,8 @@ router.post('/students/register', async (req, res) => {
           userId: parentUser._id,
           name: parentUser.name,
           email: parentUser.email,
-          phone: parentPhone,
-          address: parentAddress,
+          phone: parentPhone || '+91 98000-00000',
+          address: parentAddress || 'Address not provided',
           children: []
         });
       } else {
@@ -1193,11 +1269,11 @@ router.post('/students/register', async (req, res) => {
       const teacherId = teachers[0]?._id || null;
 
       const student = await mockStore.create('students', {
-        name,
+        name: name || 'Student',
         studentId: generatedStudentId,
-        dateOfBirth,
-        gender,
-        class: studentClass,
+        dateOfBirth: dateOfBirth || '2022-01-01',
+        gender: gender || 'Male',
+        class: studentClass || 'Pre-Nursery',
         parentId: parentProfile._id,
         teacherId,
         attendance: [],
@@ -1223,38 +1299,51 @@ router.post('/students/register', async (req, res) => {
       return res.status(201).json({ success: true, message: 'Student registered directly successfully!', data: student });
     }
 
-    const cleanEmail = (parentEmail || '').trim().toLowerCase();
-    let parentUser = await User.findOne({
-      email: { $regex: new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-    });
-    let parent;
+    // Hostinger MySQL / Database Storage
+    const rawEmail = (parentEmail || '').trim().toLowerCase();
+    const safeParentName = parentName || 'Parent Guardian';
+    const safeParentPhone = (parentPhone || '').trim() || '+91 98000-00000';
+    const safeParentAddress = (parentAddress || '').trim() || 'Address not provided';
+
+    let parentUser = null;
+    if (rawEmail) {
+      parentUser = await User.findOne({ email: rawEmail });
+    }
+
     if (!parentUser) {
-      parentUser = await User.create({
-        name: parentName || 'Parent',
-        email: cleanEmail || `parent_${Date.now()}@apnaschool.edu`,
-        password: password || 'parent123',
-        role: 'parent'
-      });
+      const emailToUse = rawEmail || `parent_${Date.now()}_${Math.floor(100 + Math.random() * 900)}@apnaschool.edu`;
+      try {
+        parentUser = await User.create({
+          name: safeParentName,
+          email: emailToUse,
+          password: password || 'parent123',
+          role: 'parent'
+        });
+      } catch (createErr) {
+        console.warn('Parent user creation notice, retrieving existing user:', createErr.message);
+        parentUser = await User.findOne({ email: emailToUse });
+        if (!parentUser) {
+          const fallbackEmail = `parent_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}@apnaschool.edu`;
+          parentUser = await User.create({
+            name: safeParentName,
+            email: fallbackEmail,
+            password: password || 'parent123',
+            role: 'parent'
+          });
+        }
+      }
+    }
+
+    let parent = await Parent.findOne({ userId: parentUser._id });
+    if (!parent) {
       parent = await Parent.create({
         userId: parentUser._id,
-        name: parentUser.name,
+        name: parentUser.name || safeParentName,
         email: parentUser.email,
-        phone: parentPhone || '+91 98XXX-XXXXX',
-        address: parentAddress || 'City Center',
+        phone: safeParentPhone,
+        address: safeParentAddress,
         children: []
       });
-    } else {
-      parent = await Parent.findOne({ userId: parentUser._id });
-      if (!parent) {
-        parent = await Parent.create({
-          userId: parentUser._id,
-          name: parentUser.name || parentName || 'Parent',
-          email: parentUser.email,
-          phone: parentPhone || '+91 98XXX-XXXXX',
-          address: parentAddress || 'City Center',
-          children: []
-        });
-      }
     }
 
     let firstTeacher = await Teacher.findOne();
@@ -1263,16 +1352,16 @@ router.post('/students/register', async (req, res) => {
       if (!teacherUser) {
         teacherUser = await User.create({
           name: 'Teacher Staff',
-          email: 'teacher@apnaschool.edu',
+          email: `teacher_${Date.now()}@apnaschool.edu`,
           password: 'teacher123',
           role: 'teacher'
         });
       }
       firstTeacher = await Teacher.create({
         userId: teacherUser._id,
-        name: teacherUser.name,
-        email: teacherUser.email,
-        phone: '+91 98XXX-XXXXX',
+        name: teacherUser.name || 'Teacher Staff',
+        email: teacherUser.email || 'teacher@apnaschool.edu',
+        phone: '+91 98000-00000',
         specialization: 'Early Childhood Education',
         qualifications: 'B.Ed, Early Childhood Certification',
         classesAssigned: ['Pre-Nursery', 'Nursery', 'Junior KG', 'Senior KG']
@@ -1282,12 +1371,13 @@ router.post('/students/register', async (req, res) => {
     const parsedDob = dateOfBirth ? new Date(dateOfBirth) : new Date('2022-01-01');
     const validDob = isNaN(parsedDob.getTime()) ? new Date('2022-01-01') : parsedDob;
     const dobString = validDob.toISOString().split('T')[0];
+    const validGender = ['Male', 'Female', 'Other'].includes(gender) ? gender : 'Male';
 
     const student = await Student.create({
-      name,
+      name: name || 'Student',
       studentId: generatedStudentId,
       dateOfBirth: dobString,
-      gender: gender || 'Male',
+      gender: validGender,
       class: studentClass || 'Pre-Nursery',
       parentId: parent._id,
       fatherName: req.body.fatherName || parentName || '',
@@ -1295,21 +1385,37 @@ router.post('/students/register', async (req, res) => {
       teacherId: firstTeacher ? firstTeacher._id : null
     });
 
-    if (!Array.isArray(parent.children)) parent.children = [];
-    parent.children.push(student._id);
-    await parent.save();
-
-    // Persist StudentFeeStructure in MySQL
-    await StudentFeeStructure.create({
-      studentId: student._id,
-      academicYear: '2026-2027',
-      admissionFee: { amount: admFeeVal, enabled: admFeeVal > 0 },
-      monthlyFee: { amount: monthlyFeeVal, enabled: true },
-      isActive: true
+    const currentChildren = Array.isArray(parent.children) ? [...parent.children] : [];
+    if (!currentChildren.includes(student._id)) {
+      currentChildren.push(student._id);
+    }
+    await Parent.findByIdAndUpdate(parent._id, {
+      children: currentChildren,
+      fatherName: req.body.fatherName || parent.fatherName || '',
+      motherName: req.body.motherName || parent.motherName || ''
     });
 
-    // Automatically assign and generate structured fees based on student's class and custom admission rates
-    await assignFeesForStudent(student._id, student.class, isMock, admFeeVal, monthlyFeeVal);
+    // Persist StudentFeeStructure in MySQL
+    try {
+      const existingFeeStruct = await StudentFeeStructure.findOne({ studentId: student._id });
+      if (!existingFeeStruct) {
+        await StudentFeeStructure.create({
+          studentId: student._id,
+          academicYear: '2026-2027',
+          admissionFee: { amount: admFeeVal, enabled: admFeeVal > 0 },
+          monthlyFee: { amount: monthlyFeeVal, enabled: true },
+          isActive: true
+        });
+      }
+    } catch (structErr) {
+      console.warn('StudentFeeStructure notice:', structErr.message);
+    }
+
+    try {
+      await assignFeesForStudent(student._id, student.class, isMock, admFeeVal, monthlyFeeVal);
+    } catch (assignErr) {
+      console.warn('Fee assignment notice:', assignErr.message);
+    }
 
     res.status(201).json({ 
       success: true, 

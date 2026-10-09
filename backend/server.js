@@ -62,11 +62,11 @@ app.use((req, res, next) => {
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Unhandled server error:', err);
   res.status(500).json({
     success: false,
-    message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err.message : {}
+    message: err.message || 'Internal Server Error',
+    error: err.message || 'Internal Server Error'
   });
 });
 
