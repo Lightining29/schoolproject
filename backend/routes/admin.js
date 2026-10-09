@@ -314,15 +314,18 @@ router.get('/admissions/document/:id/:fieldName', async (req, res) => {
       return res.send(buf);
     }
 
-    const path = admission.documents?.[fieldName];
-    if (path && typeof path === 'string') {
-      if (path.startsWith('/uploads/')) {
-        const localPath = `backend${path}`;
-        if (fs.existsSync(localPath)) {
-          return res.sendFile(localPath, { root: '.' });
+    const pathVal = admission.documents?.[fieldName];
+    if (pathVal && typeof pathVal === 'string') {
+      if (pathVal.startsWith('/uploads/')) {
+        const candidate1 = path.join(process.cwd(), 'backend', pathVal);
+        const candidate2 = path.join(process.cwd(), pathVal);
+        const candidate3 = path.join(process.cwd(), 'backend', 'uploads', pathVal.replace('/uploads/', ''));
+        const filePath = fs.existsSync(candidate1) ? candidate1 : (fs.existsSync(candidate2) ? candidate2 : (fs.existsSync(candidate3) ? candidate3 : null));
+        if (filePath) {
+          return res.sendFile(filePath);
         }
       }
-      return res.redirect(path);
+      return res.redirect(pathVal);
     }
     return res.status(404).send('Document not found');
   } catch (error) {
@@ -349,22 +352,25 @@ router.get('/students/photo/:id', async (req, res) => {
       const buf = Buffer.isBuffer(photo.data) ? photo.data : Buffer.from(photo.data, 'base64');
       return res.send(buf);
     }
-    const path = student.photo;
-    if (path && typeof path === 'string') {
-      if (path.startsWith('data:image')) {
-        const parts = path.split(',');
+    const pathVal = student.photo;
+    if (pathVal && typeof pathVal === 'string') {
+      if (pathVal.startsWith('data:image')) {
+        const parts = pathVal.split(',');
         const mime = parts[0].split(':')[1].split(';')[0];
         res.contentType(mime || 'image/jpeg');
         return res.send(Buffer.from(parts[1], 'base64'));
       }
-      if (path.startsWith('/uploads/')) {
-        const localPath = `backend${path}`;
-        if (fs.existsSync(localPath)) {
-          return res.sendFile(localPath, { root: '.' });
+      if (pathVal.startsWith('/uploads/')) {
+        const candidate1 = path.join(process.cwd(), 'backend', pathVal);
+        const candidate2 = path.join(process.cwd(), pathVal);
+        const candidate3 = path.join(process.cwd(), 'backend', 'uploads', pathVal.replace('/uploads/', ''));
+        const filePath = fs.existsSync(candidate1) ? candidate1 : (fs.existsSync(candidate2) ? candidate2 : (fs.existsSync(candidate3) ? candidate3 : null));
+        if (filePath) {
+          return res.sendFile(filePath);
         }
       }
-      if (!path.includes(`/students/photo/${id}`)) {
-        return res.redirect(path);
+      if (!pathVal.includes(`/students/photo/${id}`)) {
+        return res.redirect(pathVal);
       }
     }
     return res.status(404).send('Photo not found');
@@ -698,18 +704,43 @@ router.put('/admissions/:id', async (req, res) => {
         parent = await Parent.findOne({ userId: user._id });
       }
 
-      // Assign first available teacher if any
-      const firstTeacher = await Teacher.findOne();
+      // Assign first available teacher if any, or create fallback
+      let firstTeacher = await Teacher.findOne();
+      if (!firstTeacher) {
+        let teacherUser = await User.findOne({ role: 'teacher' });
+        if (!teacherUser) {
+          teacherUser = await User.create({
+            name: 'Teacher Staff',
+            email: 'teacher@apnaschool.edu',
+            password: 'teacher123',
+            role: 'teacher'
+          });
+        }
+        firstTeacher = await Teacher.create({
+          userId: teacherUser._id,
+          name: teacherUser.name,
+          email: teacherUser.email,
+          phone: '+91 98XXX-XXXXX',
+          specialization: 'Early Childhood Education',
+          qualifications: 'B.Ed, Early Childhood Certification',
+          classesAssigned: ['Pre-Nursery', 'Nursery', 'Junior KG', 'Senior KG']
+        });
+      }
 
       // 2. Create student
       const studentDbId = generateId();
       const generatedStudentId = `STD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const hasPhoto = admission.documentData?.photo?.data;
+      const rawDob = admission.studentDetails.dateOfBirth;
+      const parsedDob = rawDob ? new Date(rawDob) : new Date('2022-01-01');
+      const validDob = isNaN(parsedDob.getTime()) ? new Date('2022-01-01') : parsedDob;
+      const dobString = validDob.toISOString().split('T')[0];
+
       const student = await Student.create({
         _id: studentDbId,
         name: admission.studentDetails.name,
         studentId: generatedStudentId,
-        dateOfBirth: admission.studentDetails.dateOfBirth,
+        dateOfBirth: dobString,
         gender: admission.studentDetails.gender,
         class: admission.studentDetails.class,
         parentId: parent._id,
@@ -721,6 +752,7 @@ router.put('/admissions/:id', async (req, res) => {
       });
 
       // 3. Link child
+      if (!Array.isArray(parent.children)) parent.children = [];
       parent.children.push(student._id);
       await parent.save();
 
@@ -1024,18 +1056,21 @@ router.post('/admissions/create', uploadAdmissions.fields([
         name: teacherUser.name,
         email: teacherUser.email,
         phone: '+91 98XXX-XXXXX',
+        specialization: 'Early Childhood Education',
+        qualifications: 'B.Ed, Early Childhood Certification',
         classesAssigned: ['Pre-Nursery', 'Nursery', 'Junior KG', 'Senior KG']
       });
     }
 
     const parsedDob = studentDetails.dateOfBirth ? new Date(studentDetails.dateOfBirth) : new Date('2022-01-01');
     const validDob = isNaN(parsedDob.getTime()) ? new Date('2022-01-01') : parsedDob;
+    const dobString = validDob.toISOString().split('T')[0];
 
     const student = await Student.create({
       _id: studentDbId,
       name: studentDetails.name,
       studentId: generatedStudentId,
-      dateOfBirth: validDob,
+      dateOfBirth: dobString,
       gender: studentDetails.gender || 'Male',
       class: studentDetails.class || 'Pre-Nursery',
       parentId: parent._id,
@@ -1046,7 +1081,7 @@ router.post('/admissions/create', uploadAdmissions.fields([
       photoData: photoFile ? makeDocData(photoFile) : undefined
     });
 
-    if (!parent.children) parent.children = [];
+    if (!Array.isArray(parent.children)) parent.children = [];
     parent.children.push(student._id);
     if (parentDetails.fatherName) parent.fatherName = parentDetails.fatherName;
     if (parentDetails.motherName) parent.motherName = parentDetails.motherName;
@@ -1057,7 +1092,7 @@ router.post('/admissions/create', uploadAdmissions.fields([
       applicationNumber: appNo,
       studentDetails: {
         ...studentDetails,
-        dateOfBirth: validDob
+        dateOfBirth: dobString
       },
       parentDetails,
       documents,
@@ -1117,7 +1152,8 @@ router.post('/admissions/create', uploadAdmissions.fields([
       receipt: createdReceipt
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Error creating admission:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error occurred while creating admission' });
   }
 });
 
@@ -1237,17 +1273,20 @@ router.post('/students/register', async (req, res) => {
         name: teacherUser.name,
         email: teacherUser.email,
         phone: '+91 98XXX-XXXXX',
+        specialization: 'Early Childhood Education',
+        qualifications: 'B.Ed, Early Childhood Certification',
         classesAssigned: ['Pre-Nursery', 'Nursery', 'Junior KG', 'Senior KG']
       });
     }
 
     const parsedDob = dateOfBirth ? new Date(dateOfBirth) : new Date('2022-01-01');
     const validDob = isNaN(parsedDob.getTime()) ? new Date('2022-01-01') : parsedDob;
+    const dobString = validDob.toISOString().split('T')[0];
 
     const student = await Student.create({
       name,
       studentId: generatedStudentId,
-      dateOfBirth: validDob,
+      dateOfBirth: dobString,
       gender: gender || 'Male',
       class: studentClass || 'Pre-Nursery',
       parentId: parent._id,
@@ -1256,7 +1295,7 @@ router.post('/students/register', async (req, res) => {
       teacherId: firstTeacher ? firstTeacher._id : null
     });
 
-    if (!parent.children) parent.children = [];
+    if (!Array.isArray(parent.children)) parent.children = [];
     parent.children.push(student._id);
     await parent.save();
 
@@ -1296,7 +1335,8 @@ router.post('/students/register', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Error registering student directly:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error occurred while registering student' });
   }
 });
 
