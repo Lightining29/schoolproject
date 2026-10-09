@@ -72,6 +72,9 @@ export default function AdminDashboard() {
   const [admPhoto, setAdmPhoto] = useState(null);
 
   const [admissionFee, setAdmissionFee] = useState('');
+  const [admissionMonthlyFee, setAdmissionMonthlyFee] = useState('');
+  const [admApprovalMonthlyFee, setAdmApprovalMonthlyFee] = useState('');
+  const [admApprovalAdmissionFee, setAdmApprovalAdmissionFee] = useState('');
 
   // Receipt Modal State
   const [activeReceipt, setActiveReceipt] = useState(null);
@@ -87,6 +90,8 @@ export default function AdminDashboard() {
   const [regParentPhone, setRegParentPhone] = useState('');
   const [regParentAddress, setRegParentAddress] = useState('');
   const [regParentPassword, setRegParentPassword] = useState('');
+  const [regAdmissionFee, setRegAdmissionFee] = useState('');
+  const [regMonthlyFee, setRegMonthlyFee] = useState('');
 
   // Search & Filtering for Student Registry
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -1063,7 +1068,7 @@ export default function AdminDashboard() {
   };
 
   // Admissions Action
-  const handleAdmissionDecision = async (id, status, pswd) => {
+  const handleAdmissionDecision = async (id, status, pswd, admFee = null, mFee = null) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/admissions/${id}`, {
@@ -1072,12 +1077,20 @@ export default function AdminDashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ status, remarks, password: pswd })
+        body: JSON.stringify({
+          status,
+          remarks,
+          password: pswd,
+          admissionFee: admFee !== null ? admFee : (admApprovalAdmissionFee || undefined),
+          monthlyFee: mFee !== null ? mFee : (admApprovalMonthlyFee || undefined)
+        })
       });
       const data = await res.json();
       setLoading(false);
       setRemarks('');
       setParentPassword('');
+      setAdmApprovalMonthlyFee('');
+      setAdmApprovalAdmissionFee('');
       setSelectedAdmission(null);
       if (data.success) {
         alert(`Admission application successfully marked ${status}!`);
@@ -1437,6 +1450,7 @@ export default function AdminDashboard() {
           formData.append('parentDetails', JSON.stringify(parentDetails));
           formData.append('password', admParentPassword);
           formData.append('admissionFee', admissionFee || '0');
+          formData.append('monthlyFee', admissionMonthlyFee || '0');
 
           if (admBirthCertificate) {
             formData.append('birthCertificate', admBirthCertificate);
@@ -1509,6 +1523,7 @@ export default function AdminDashboard() {
             setAdmBirthCertificate(null);
             setAdmPhoto(null);
             setAdmissionFee('');
+            setAdmissionMonthlyFee('');
 
             const certInput = document.getElementById('adm-cert-input');
             const photoInput = document.getElementById('adm-photo-input');
@@ -1556,7 +1571,9 @@ export default function AdminDashboard() {
               parentEmail: regParentEmail,
               parentPhone: regParentPhone,
               parentAddress: regParentAddress,
-              password: regParentPassword
+              password: regParentPassword,
+              admissionFee: regAdmissionFee || '0',
+              monthlyFee: regMonthlyFee || '0'
             })
           });
           const data = await res.json();
@@ -1593,6 +1610,8 @@ export default function AdminDashboard() {
             setRegParentPhone('');
             setRegParentAddress('');
             setRegParentPassword('');
+            setRegAdmissionFee('');
+            setRegMonthlyFee('');
 
             setUsersSubTab('registry');
             fetchStudents();
@@ -2557,19 +2576,35 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* Admission Fees Section */}
+                    {/* Admission & Monthly Fees Section */}
                     <div className="space-y-3">
-                      <h5 className="pb-1 font-bold border-b text-slate-800 font-quicksand">4. Admission Fees Collection</h5>
+                      <h5 className="pb-1 font-bold border-b text-slate-800 font-quicksand flex items-center justify-between">
+                        <span>4. Fee Decision at Admission Time (Admin Controlled)</span>
+                        <span className="text-[10px] text-[#5B468C] font-semibold">Decide student's monthly fee upon registration</span>
+                      </h5>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <label className="font-bold text-slate-600">Admission Fee Amount (₹) (Not a dropdown)</label>
+                          <label className="font-bold text-slate-600">One-Time Admission Fee (₹)</label>
                           <input
                             type="number"
-                            placeholder="Enter fee amount (e.g. 5000)"
+                            placeholder="e.g. 5000 (0 if waived)"
                             value={admissionFee}
                             onChange={e => setAdmissionFee(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none font-semibold text-slate-700 text-xs"
                           />
+                          <span className="text-[10px] text-slate-400">One-time fee collected at admission time</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-600">Monthly Fee to Pay Every Month (₹) <span className="text-brandCoral">*</span></label>
+                          <input
+                            type="number"
+                            required
+                            placeholder="e.g. 2500"
+                            value={admissionMonthlyFee}
+                            onChange={e => setAdmissionMonthlyFee(e.target.value)}
+                            className="w-full bg-white border border-purple-200 focus:border-[#5B468C] rounded-xl p-2.5 outline-none font-bold text-slate-800 text-xs shadow-sm"
+                          />
+                          <span className="text-[10px] text-purple-600 font-medium">Individual monthly fee structure applicable to this student</span>
                         </div>
                       </div>
                     </div>
@@ -2928,6 +2963,39 @@ export default function AdminDashboard() {
                             value={regParentPassword} onChange={e => setRegParentPassword(e.target.value)}
                             className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none"
                           />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Fee Setup at Registration Time */}
+                    <div className="space-y-3">
+                      <h5 className="pb-1 font-bold border-b text-slate-800 font-quicksand flex items-center justify-between">
+                        <span>3. Fee Decision at Registration Time (Admin Controlled)</span>
+                        <span className="text-[10px] text-[#5B468C] font-semibold">Decide student's monthly fee upon registration</span>
+                      </h5>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-600">Admission Fee Amount (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 5000 (0 if waived)"
+                            value={regAdmissionFee}
+                            onChange={e => setRegAdmissionFee(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 outline-none font-semibold text-slate-700 text-xs"
+                          />
+                          <span className="text-[10px] text-slate-400">One-time fee collected at registration time</span>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-600">Monthly Fee to Pay Every Month (₹) <span className="text-brandCoral">*</span></label>
+                          <input
+                            type="number"
+                            required
+                            placeholder="e.g. 2500"
+                            value={regMonthlyFee}
+                            onChange={e => setRegMonthlyFee(e.target.value)}
+                            className="w-full bg-white border border-purple-200 focus:border-[#5B468C] rounded-xl p-2.5 outline-none font-bold text-slate-800 text-xs shadow-sm"
+                          />
+                          <span className="text-[10px] text-purple-600 font-medium">Individual monthly tuition fee structure</span>
                         </div>
                       </div>
                     </div>
@@ -4477,7 +4545,71 @@ export default function AdminDashboard() {
 
                     {/* Pending Dues Queue & Sent Logs Table */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Left: Overdue Students Queue */}
+                      {/* Left 1: Upcoming Next Month Fees Queue */}
+                      <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <h4 className="font-quicksand font-bold text-slate-800 text-sm flex items-center space-x-2">
+                            <Clock className="w-4 h-4 text-sky-600" />
+                            <span>Upcoming Dues & Reminders ({remindersData?.upcoming?.length || 0})</span>
+                          </h4>
+                          <span className="text-[10px] font-mono bg-sky-50 text-sky-700 px-2 py-0.5 rounded-full font-bold">
+                            Countdown Active
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                          <table className="w-full text-xs text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px]">
+                                <th className="p-2.5">Student</th>
+                                <th className="p-2.5">Due In</th>
+                                <th className="p-2.5 text-right">Amount (₹)</th>
+                                <th className="p-2.5 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                              {(!remindersData?.upcoming || remindersData.upcoming.length === 0) ? (
+                                <tr>
+                                  <td colSpan="4" className="p-6 text-center text-slate-400 font-bold">
+                                    No upcoming dues due in next 7 days.
+                                  </td>
+                                </tr>
+                              ) : (
+                                remindersData.upcoming.map((item, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                    <td className="p-2.5">
+                                      <span className="font-bold text-slate-900 block">{item.student?.name}</span>
+                                      <span className="text-[10px] text-slate-400">{item.student?.class} &bull; {item.parentPhone || 'No Phone'}</span>
+                                    </td>
+                                    <td className="p-2.5 text-[11px]">
+                                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                                        {item.reminderNotice || `Will pay after ${item.daysRemaining} days`}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                                        Due: {item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-IN') : 'N/A'}
+                                      </span>
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-black text-slate-800">
+                                      ₹{Number(item.dueAmount).toLocaleString('en-IN')}
+                                    </td>
+                                    <td className="p-2.5 text-right">
+                                      <button
+                                        type="button"
+                                        onClick={() => openUniversalPayModal(item.student, item.fee)}
+                                        className="px-2.5 py-1 bg-black text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-800"
+                                      >
+                                        Collect
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Left 2: Overdue Students Queue */}
                       <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                           <h4 className="font-quicksand font-bold text-slate-800 text-sm flex items-center space-x-2">
@@ -5653,6 +5785,36 @@ export default function AdminDashboard() {
                 {selectedAdmission.status === 'pending' ? (
                   <div className="bg-[#FAF9F5] border border-orange-100 p-4 rounded-3xl space-y-4">
                     <h5 className="text-xs font-bold font-quicksand text-slate-800">Approval Decisions & Provisioning</h5>
+
+                    <div className="grid grid-cols-2 gap-3 bg-amber-50/60 p-3 rounded-2xl border border-amber-200/60">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                          Admission Fee (₹)
+                        </label>
+                        <input
+                          type="number"
+                          value={admApprovalAdmissionFee}
+                          onChange={(e) => setAdmApprovalAdmissionFee(e.target.value)}
+                          placeholder="e.g. 5000"
+                          className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-800 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-emerald-700 uppercase flex items-center gap-1">
+                          Monthly Fee (₹) *
+                        </label>
+                        <input
+                          type="number"
+                          value={admApprovalMonthlyFee}
+                          onChange={(e) => setAdmApprovalMonthlyFee(e.target.value)}
+                          placeholder="e.g. 2500"
+                          className="w-full bg-white border border-emerald-300 rounded-xl p-2 text-xs font-bold text-emerald-800 outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <p className="col-span-2 text-[10px] text-slate-500 italic">
+                        Decide what monthly fee this student will pay every month upon admission.
+                      </p>
+                    </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-slate-500 uppercase">Reviewer Remarks</label>

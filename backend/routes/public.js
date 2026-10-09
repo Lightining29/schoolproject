@@ -166,11 +166,22 @@ router.post('/admissions/apply', uploadAdmissions.fields([
 
     const makeDocData = (file) => {
       if (!file) return undefined;
-      return {
-        data: file.buffer ? file.buffer.toString('base64') : '',
-        contentType: file.mimetype,
-        filename: file.originalname
-      };
+      let buf = file.buffer;
+      if (!buf && file.path && fs.existsSync(file.path)) {
+        try {
+          buf = fs.readFileSync(file.path);
+        } catch (e) {
+          console.error('Error reading upload in public apply:', e);
+        }
+      }
+      if (buf) {
+        return {
+          data: buf.toString('base64'),
+          contentType: file.mimetype || 'image/jpeg',
+          filename: file.filename || file.originalname
+        };
+      }
+      return undefined;
     };
 
     const documents = {

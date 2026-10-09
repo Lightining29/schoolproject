@@ -99,7 +99,36 @@ router.get('/parent/child/:childId/fees', protect, authorize('parent'), async (r
       };
     });
 
-    res.json({ success: true, fees, paymentKey: getPublicPaymentKey() });
+    // Identify next pending fee and calculate countdown in days
+    const unpaidFees = fees.filter(f => f.status !== 'paid' && (f.balanceAmount > 0 || f.remainingAmount > 0));
+    let nextFeeReminder = null;
+    if (unpaidFees.length > 0) {
+      const sortedUnpaid = [...unpaidFees].sort((a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0));
+      const nextFee = sortedUnpaid[0];
+      const dueDate = new Date(nextFee.dueDate);
+      const diffDays = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+      const dueAmt = nextFee.balanceAmount !== undefined ? nextFee.balanceAmount : (nextFee.remainingAmount || nextFee.amount);
+      
+      let reminderMessage = '';
+      if (diffDays > 0) {
+        reminderMessage = `Next month fees of ₹${dueAmt.toLocaleString('en-IN')} will pay after ${diffDays} day${diffDays === 1 ? '' : 's'} (Due Date: ${dueDate.toLocaleDateString('en-IN')})`;
+      } else if (diffDays === 0) {
+        reminderMessage = `Fee of ₹${dueAmt.toLocaleString('en-IN')} is due today (Due Date: ${dueDate.toLocaleDateString('en-IN')})`;
+      } else {
+        reminderMessage = `Fee of ₹${dueAmt.toLocaleString('en-IN')} is overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}`;
+      }
+
+      nextFeeReminder = {
+        feeId: nextFee._id,
+        term: nextFee.term,
+        amount: dueAmt,
+        dueDate: nextFee.dueDate,
+        daysRemaining: diffDays,
+        message: reminderMessage
+      };
+    }
+
+    res.json({ success: true, fees, nextFeeReminder, paymentKey: getPublicPaymentKey() });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

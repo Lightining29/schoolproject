@@ -27,7 +27,7 @@ import { generateSchoolNoticeAI, generateFinancialForecastAI } from '../config/a
 
 const router = express.Router();
 
-async function assignFeesForStudent(studentId, className, isMock, customAdmissionFee) {
+async function assignFeesForStudent(studentId, className, isMock, customAdmissionFee, customMonthlyFee) {
   // Check if student has a custom StudentFeeStructure
   let studentStructure = null;
   if (isMock) {
@@ -59,7 +59,7 @@ async function assignFeesForStudent(studentId, className, isMock, customAdmissio
     '8th': 2500
   };
 
-  let monthlySum = defaultClassFees[className] || 1250;
+  let monthlySum = (Number(customMonthlyFee) > 0) ? Number(customMonthlyFee) : (defaultClassFees[className] || 1250);
   let admissionFee = Number(customAdmissionFee) || 0;
   let annualCharges = 0;
   let examinationFee = 0;
@@ -88,12 +88,16 @@ async function assignFeesForStudent(studentId, className, isMock, customAdmissio
 
     if (baseMonthly > 0) {
       monthlySum = baseMonthly;
+    } else if (Number(customMonthlyFee) > 0) {
+      monthlySum = Number(customMonthlyFee);
     }
 
     if (studentStructure.discount?.amount > 0) {
       discountAmount = Number(studentStructure.discount.amount);
       discountReason = studentStructure.discount.reason || 'Admin Concession';
     }
+  } else if (Number(customMonthlyFee) > 0) {
+    monthlySum = Number(customMonthlyFee);
   } else if (classStructure) {
     if (!admissionFee && classStructure.admissionFee) admissionFee = classStructure.admissionFee;
     annualCharges = classStructure.annualCharges || 0;
@@ -295,32 +299,29 @@ async function getCalculatedFees(rawFees) {
 router.get('/admissions/document/:id/:fieldName', async (req, res) => {
   try {
     const { id, fieldName } = req.params;
+    let admission = null;
     if (mockStore.isMock) {
-      const admission = await mockStore.findById('admissions', id);
-      if (!admission) return res.status(404).send('Admission record not found');
-      
-      const doc = admission.documentData?.[fieldName];
-      if (doc && doc.data) {
-        res.contentType(doc.contentType || 'application/octet-stream');
-        return res.send(Buffer.from(doc.data, 'base64'));
-      }
-      const path = admission.documents?.[fieldName];
-      if (path && typeof path === 'string') {
-        return res.redirect(path);
-      }
-      return res.status(404).send('Document not found');
+      admission = await mockStore.findById('admissions', id);
+    } else {
+      admission = await Admission.findById(id);
     }
-
-    const admission = await Admission.findById(id);
     if (!admission) return res.status(404).send('Admission record not found');
     
     const doc = admission.documentData?.[fieldName];
     if (doc && doc.data) {
       res.contentType(doc.contentType || 'application/octet-stream');
-      return res.send(doc.data);
+      const buf = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data, 'base64');
+      return res.send(buf);
     }
+
     const path = admission.documents?.[fieldName];
     if (path && typeof path === 'string') {
+      if (path.startsWith('/uploads/')) {
+        const localPath = `backend${path}`;
+        if (fs.existsSync(localPath)) {
+          return res.sendFile(localPath, { root: '.' });
+        }
+      }
       return res.redirect(path);
     }
     return res.status(404).send('Document not found');
@@ -334,33 +335,37 @@ router.get('/admissions/document/:id/:fieldName', async (req, res) => {
 router.get('/students/photo/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    let student = null;
     if (mockStore.isMock) {
-      const student = await mockStore.findById('students', id);
-      if (!student) return res.status(404).send('Student not found');
-      
-      const photo = student.photoData;
-      if (photo && photo.data) {
-        res.contentType(photo.contentType || 'image/png');
-        return res.send(Buffer.from(photo.data, 'base64'));
-      }
-      const path = student.photo;
-      if (path && typeof path === 'string') {
-        return res.redirect(path);
-      }
-      return res.status(404).send('Photo not found');
+      student = await mockStore.findById('students', id);
+    } else {
+      student = await Student.findById(id);
     }
-
-    const student = await Student.findById(id);
     if (!student) return res.status(404).send('Student not found');
     
     const photo = student.photoData;
     if (photo && photo.data) {
-      res.contentType(photo.contentType || 'image/png');
-      return res.send(photo.data);
+      res.contentType(photo.contentType || 'image/jpeg');
+      const buf = Buffer.isBuffer(photo.data) ? photo.data : Buffer.from(photo.data, 'base64');
+      return res.send(buf);
     }
     const path = student.photo;
     if (path && typeof path === 'string') {
-      return res.redirect(path);
+      if (path.startsWith('data:image')) {
+        const parts = path.split(',');
+        const mime = parts[0].split(':')[1].split(';')[0];
+        res.contentType(mime || 'image/jpeg');
+        return res.send(Buffer.from(parts[1], 'base64'));
+      }
+      if (path.startsWith('/uploads/')) {
+        const localPath = `backend${path}`;
+        if (fs.existsSync(localPath)) {
+          return res.sendFile(localPath, { root: '.' });
+        }
+      }
+      if (!path.includes(`/students/photo/${id}`)) {
+        return res.redirect(path);
+      }
     }
     return res.status(404).send('Photo not found');
   } catch (error) {
@@ -639,8 +644,21 @@ router.put('/admissions/:id', async (req, res) => {
         parentProfile.children.push(newStudent._id);
         await mockStore.findByIdAndUpdate('parents', parentProfile._id, { children: parentProfile.children });
 
-        // Automatically assign fee structure according to class
-        await assignFeesForStudent(newStudent._id, newStudent.class, true);
+        // Save Student Fee Structure if monthlyFee specified at admission time
+        const admMonthlyFee = Number(req.body.monthlyFee) || Number(admission.monthlyFee) || 0;
+        const admAdmissionFee = Number(req.body.admissionFee) || Number(admission.admissionFee) || 0;
+        if (admMonthlyFee > 0) {
+          await mockStore.create('studentFeeStructures', {
+            studentId: newStudent._id,
+            academicYear: '2026-2027',
+            monthlyFee: { amount: admMonthlyFee, enabled: true },
+            admissionFee: { amount: admAdmissionFee, enabled: admAdmissionFee > 0 },
+            isActive: true
+          });
+        }
+
+        // Automatically assign fee structure according to class and custom rates
+        await assignFeesForStudent(newStudent._id, newStudent.class, true, admAdmissionFee, admMonthlyFee);
       }
 
       return res.json({ success: true, message: `Admission application status updated to ${status}!`, data: admission });
@@ -706,8 +724,21 @@ router.put('/admissions/:id', async (req, res) => {
       parent.children.push(student._id);
       await parent.save();
 
-      // Automatically assign fee structure according to class
-      await assignFeesForStudent(student._id, student.class, false);
+      // Save Student Fee Structure if monthlyFee specified at admission time
+      const admMonthlyFee = Number(req.body.monthlyFee) || Number(admission.monthlyFee) || 0;
+      const admAdmissionFee = Number(req.body.admissionFee) || Number(admission.admissionFee) || 0;
+      if (admMonthlyFee > 0) {
+        await StudentFeeStructure.create({
+          studentId: student._id,
+          academicYear: '2026-2027',
+          monthlyFee: { amount: admMonthlyFee, enabled: true },
+          admissionFee: { amount: admAdmissionFee, enabled: admAdmissionFee > 0 },
+          isActive: true
+        });
+      }
+
+      // Automatically assign fee structure according to class and custom rates
+      await assignFeesForStudent(student._id, student.class, false, admAdmissionFee, admMonthlyFee);
     }
 
     res.json({ success: true, message: `Admission application status updated to ${status}!`, data: admission });
@@ -774,7 +805,7 @@ router.post('/admissions/create', uploadAdmissions.fields([
   { name: 'motherAadhaarCard', maxCount: 1 },
   { name: 'addressProof', maxCount: 1 }
 ]), async (req, res) => {
-  let { studentDetails, parentDetails, password, admissionFee, addressProofType } = req.body;
+  let { studentDetails, parentDetails, password, admissionFee, monthlyFee, addressProofType } = req.body;
   
   try {
     if (typeof studentDetails === 'string') studentDetails = JSON.parse(studentDetails);
@@ -808,12 +839,19 @@ router.post('/admissions/create', uploadAdmissions.fields([
 
     const makeDocData = (file) => {
       if (!file) return undefined;
-      // Only keep small in-memory buffers if memoryStorage was used and file is tiny (<500KB)
-      if (file.buffer && file.buffer.length < 500 * 1024) {
+      let buf = file.buffer;
+      if (!buf && file.path && fs.existsSync(file.path)) {
+        try {
+          buf = fs.readFileSync(file.path);
+        } catch (e) {
+          console.error('Error reading upload file from disk:', e);
+        }
+      }
+      if (buf && buf.length < 5 * 1024 * 1024) {
         return {
-          data: isMock ? file.buffer.toString('base64') : file.buffer,
-          contentType: file.mimetype,
-          filename: file.originalname
+          data: isMock ? buf.toString('base64') : buf.toString('base64'),
+          contentType: file.mimetype || 'image/jpeg',
+          filename: file.filename || file.originalname
         };
       }
       return undefined;
@@ -901,46 +939,30 @@ router.post('/admissions/create', uploadAdmissions.fields([
         submissionDate: new Date()
       });
 
-      // Create Admission Fee invoice + receipt if provided
-      let createdAdmissionFee = null;
-      let createdReceipt = null;
       const admissionFeeVal = Number(admissionFee) || 0;
+      const monthlyFeeVal = Number(monthlyFee) || 0;
+
+      // Persist custom StudentFeeStructure
+      await mockStore.create('studentFeeStructures', {
+        studentId: newStudent._id,
+        academicYear: '2026-2027',
+        admissionFee: { amount: admissionFeeVal, enabled: admissionFeeVal > 0 },
+        monthlyFee: { amount: monthlyFeeVal, enabled: true },
+        isActive: true
+      });
+
+      // Automatically assign fees according to decided admission rates
+      await assignFeesForStudent(newStudent._id, newStudent.class, isMock, admissionFeeVal, monthlyFeeVal);
+
+      let createdReceipt = null;
       if (admissionFeeVal > 0) {
-        const txnId = `TXN-ADM-${Math.floor(100000 + Math.random() * 900000)}`;
-        createdAdmissionFee = await mockStore.create('fees', {
-          studentId: newStudent._id,
-          amount: admissionFeeVal,
-          term: 'Admission Fee',
-          dueDate: new Date(),
-          status: 'paid',
-          paymentDate: new Date(),
-          transactionId: txnId,
-          paymentMethod: 'Admission Desk Cash'
-        });
-        createdReceipt = await mockStore.create('receipts', {
-          feeId: createdAdmissionFee._id,
-          studentId: newStudent._id,
+        createdReceipt = {
           receiptNumber: `REC-ADM-${Date.now()}`,
           amountPaid: admissionFeeVal,
           paymentMethod: 'Admission Desk Cash',
           paymentDate: new Date(),
-          transactionId: txnId
-        });
-      }
-
-      for (let i = 1; i <= 12; i++) {
-        const dueDate = new Date();
-        dueDate.setMonth(dueDate.getMonth() + (i - 1));
-        await mockStore.create('fees', {
-          studentId: newStudent._id,
-          amount: 150,
-          term: `Month ${i} Tuition Fee`,
-          dueDate,
-          status: i === 1 ? 'paid' : 'pending',
-          paymentDate: i === 1 ? new Date() : null,
-          transactionId: i === 1 ? `TXN-INIT-${Math.floor(100000 + Math.random() * 900000)}` : '',
-          paymentMethod: i === 1 ? 'Admission Desk Cash' : ''
-        });
+          transactionId: `TXN-ADM-${Date.now()}`
+        };
       }
 
       return res.status(201).json({ 
@@ -1044,10 +1066,21 @@ router.post('/admissions/create', uploadAdmissions.fields([
       remarks: 'Direct Admin Admission'
     });
 
-    // Automatically assign and generate structured fees based on student's class
+    // Automatically assign and generate structured fees based on student's class and custom admission rates
     let createdReceipt = null;
     const admissionFeeVal = Number(admissionFee) || 0;
-    await assignFeesForStudent(student._id, student.class, isMock, admissionFeeVal);
+    const monthlyFeeVal = Number(monthlyFee) || 0;
+
+    // Persist StudentFeeStructure in MySQL
+    await StudentFeeStructure.create({
+      studentId: student._id,
+      academicYear: '2026-2027',
+      admissionFee: { amount: admissionFeeVal, enabled: admissionFeeVal > 0 },
+      monthlyFee: { amount: monthlyFeeVal, enabled: true },
+      isActive: true
+    });
+
+    await assignFeesForStudent(student._id, student.class, isMock, admissionFeeVal, monthlyFeeVal);
 
     if (admissionFeeVal > 0) {
       createdReceipt = {
@@ -1090,10 +1123,12 @@ router.post('/admissions/create', uploadAdmissions.fields([
 
 // Direct Student Registration (Admin-only)
 router.post('/students/register', async (req, res) => {
-  const { name, dateOfBirth, gender, studentClass, parentName, parentEmail, parentPhone, parentAddress, password } = req.body;
+  const { name, dateOfBirth, gender, studentClass, parentName, parentEmail, parentPhone, parentAddress, password, admissionFee, monthlyFee } = req.body;
   
   try {
     const generatedStudentId = `STD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const admFeeVal = Number(admissionFee) || 0;
+    const monthlyFeeVal = Number(monthlyFee) || 0;
 
     if (mockStore.isMock) {
       let parentUser = await mockStore.findOne('users', { email: parentEmail });
@@ -1137,20 +1172,17 @@ router.post('/students/register', async (req, res) => {
       parentProfile.children.push(student._id);
       await mockStore.findByIdAndUpdate('parents', parentProfile._id, { children: parentProfile.children });
 
-      for (let i = 1; i <= 12; i++) {
-        const dueDate = new Date();
-        dueDate.setMonth(dueDate.getMonth() + (i - 1));
-        await mockStore.create('fees', {
-          studentId: student._id,
-          amount: 150,
-          term: `Month ${i} Tuition Fee`,
-          dueDate,
-          status: i === 1 ? 'paid' : 'pending',
-          paymentDate: i === 1 ? new Date() : null,
-          transactionId: i === 1 ? `TXN-INIT-${Math.floor(100000 + Math.random() * 900000)}` : '',
-          paymentMethod: i === 1 ? 'Admission Desk Cash' : ''
-        });
-      }
+      // Save StudentFeeStructure
+      await mockStore.create('studentFeeStructures', {
+        studentId: student._id,
+        academicYear: '2026-2027',
+        admissionFee: { amount: admFeeVal, enabled: admFeeVal > 0 },
+        monthlyFee: { amount: monthlyFeeVal, enabled: true },
+        isActive: true
+      });
+
+      // Automatically assign fees with decided admission & monthly rates
+      await assignFeesForStudent(student._id, student.class, true, admFeeVal, monthlyFeeVal);
 
       return res.status(201).json({ success: true, message: 'Student registered directly successfully!', data: student });
     }
@@ -1228,8 +1260,17 @@ router.post('/students/register', async (req, res) => {
     parent.children.push(student._id);
     await parent.save();
 
-    // Automatically assign and generate structured fees based on student's class
-    await assignFeesForStudent(student._id, student.class, isMock, 0);
+    // Persist StudentFeeStructure in MySQL
+    await StudentFeeStructure.create({
+      studentId: student._id,
+      academicYear: '2026-2027',
+      admissionFee: { amount: admFeeVal, enabled: admFeeVal > 0 },
+      monthlyFee: { amount: monthlyFeeVal, enabled: true },
+      isActive: true
+    });
+
+    // Automatically assign and generate structured fees based on student's class and custom admission rates
+    await assignFeesForStudent(student._id, student.class, isMock, admFeeVal, monthlyFeeVal);
 
     res.status(201).json({ 
       success: true, 
@@ -3046,34 +3087,74 @@ router.get('/reminders', async (req, res) => {
 
     const now = new Date();
     let pendingInvoices = [];
+    let students = [];
+    let parents = [];
     if (mockStore.isMock) {
       const allFees = await mockStore.find('fees');
       pendingInvoices = allFees.filter(f => f.status !== 'paid' && f.status !== 'cancelled');
+      students = await mockStore.find('students');
+      parents = await mockStore.find('parents');
     } else {
       pendingInvoices = await Fee.find({ status: { $in: ['pending', 'partially_paid', 'overdue'] } }).lean();
+      students = await Student.find().lean();
+      parents = await Parent.find().lean();
     }
 
-    // Classify pending fees into reminder categories
-    let upcomingCount = 0;
-    let dueTodayCount = 0;
-    let overdueCount = 0;
+    const studentMap = {};
+    students.forEach(s => { studentMap[String(s._id)] = s; });
+
+    const parentMap = {};
+    parents.forEach(p => { parentMap[String(p._id)] = p; });
+
+    // Classify pending fees into reminder categories with rich detail
+    const upcomingList = [];
+    const dueTodayList = [];
+    const overdueList = [];
 
     pendingInvoices.forEach(f => {
+      const std = studentMap[String(f.studentId)];
+      if (!std) return;
+      const prnt = std.parentId ? parentMap[String(std.parentId._id || std.parentId)] : null;
+      const parentName = prnt?.name || std.fatherName || 'Parent';
+      const parentEmail = prnt?.email || '';
+      const parentPhone = prnt?.phone || '';
+
       const d = new Date(f.dueDate);
       const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
-      if (diffDays > 0 && diffDays <= 7) upcomingCount++;
-      else if (diffDays === 0) dueTodayCount++;
-      else if (diffDays < 0) overdueCount++;
+      const dueAmt = f.remainingAmount !== undefined ? f.remainingAmount : (f.amount - (f.paidAmount || 0));
+
+      const itemPayload = {
+        student: { _id: std._id, name: std.name, class: std.class, studentId: std.studentId },
+        fee: f,
+        dueAmount: dueAmt,
+        dueDate: f.dueDate,
+        parentName,
+        parentEmail,
+        parentPhone,
+        daysRemaining: diffDays,
+        daysOverdue: diffDays < 0 ? Math.abs(diffDays) : 0,
+        reminderNotice: diffDays > 0 
+          ? `Next month fee will pay after ${diffDays} day${diffDays === 1 ? '' : 's'}`
+          : diffDays === 0 ? 'Fee is due today' : `Fee is overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}`
+      };
+
+      if (diffDays > 0) upcomingList.push(itemPayload);
+      else if (diffDays === 0) dueTodayList.push(itemPayload);
+      else overdueList.push(itemPayload);
     });
 
     res.json({
       success: true,
       stats: {
-        upcomingDue: upcomingCount,
-        dueToday: dueTodayCount,
-        overdue: overdueCount,
+        upcomingDue: upcomingList.length,
+        dueToday: dueTodayList.length,
+        overdue: overdueList.length,
         totalSent: reminders.length
       },
+      upcoming: upcomingList.sort((a, b) => a.daysRemaining - b.daysRemaining),
+      dueToday: dueTodayList,
+      overdue: overdueList.sort((a, b) => b.daysOverdue - a.daysOverdue),
+      logs: reminders.sort((a, b) => new Date(b.sentAt || b.createdAt) - new Date(a.sentAt || a.createdAt)),
       reminders: reminders.sort((a, b) => new Date(b.sentAt || b.createdAt) - new Date(a.sentAt || a.createdAt))
     });
   } catch (error) {

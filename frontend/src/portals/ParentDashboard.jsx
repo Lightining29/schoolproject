@@ -14,6 +14,7 @@ export default function ParentDashboard() {
   
   // Fee states
   const [fees, setFees] = useState([]);
+  const [nextFeeReminder, setNextFeeReminder] = useState(null);
   const [payingFeeId, setPayingFeeId] = useState(null);
   const [activeResultCard, setActiveResultCard] = useState(null);
   const [activeIdCard, setActiveIdCard] = useState(null);
@@ -79,6 +80,7 @@ export default function ParentDashboard() {
       .then(data => {
         if (data.success) {
           setFees(data.fees);
+          setNextFeeReminder(data.nextFeeReminder || null);
         }
       })
       .catch(err => console.error(err));
@@ -594,6 +596,45 @@ export default function ParentDashboard() {
                       <p className="text-[11px] text-slate-400">View invoices, sibling discounts, pay installments, and download official receipts.</p>
                     </div>
                   </div>
+
+                  {/* Dynamic Next Month Fee Reminder Banner */}
+                  {nextFeeReminder && (
+                    <div className="bg-gradient-to-r from-amber-50 via-sky-50 to-indigo-50 border-2 border-sky-200/90 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+                      <div className="flex items-center space-x-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow shrink-0">
+                          <Clock className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                              Payment Reminder
+                            </span>
+                            <span className="text-xs font-black text-slate-800">
+                              {nextFeeReminder.term}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-slate-700 mt-1">
+                            {nextFeeReminder.message || `Next month fees will pay after ${nextFeeReminder.daysRemaining} days`}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Due Date: {nextFeeReminder.dueDate ? new Date(nextFeeReminder.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Upcoming'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 self-end sm:self-center">
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold text-slate-400 block uppercase">Amount Due</span>
+                          <span className="text-base font-black font-mono text-slate-900">
+                            ₹{Number(nextFeeReminder.amount || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <span className="px-3 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-quicksand font-bold shadow">
+                          {nextFeeReminder.daysRemaining > 0 ? `${nextFeeReminder.daysRemaining} Days Left` : 'Due Today'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {fees.length > 0 ? (
                     <div className="space-y-4">
