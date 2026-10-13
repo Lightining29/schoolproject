@@ -24,6 +24,7 @@ import { protect, authorize } from '../middleware/auth.js';
 import mockStore from '../config/mockStore.js';
 import { uploadGallery, uploadAdmissions } from '../middleware/upload.js';
 import { generateSchoolNoticeAI, generateFinancialForecastAI } from '../config/aiVerificationService.js';
+import { sendWhatsAppMessage, buildWhatsAppFeeMessage, generateDirectWhatsAppLink, formatPhoneNumberForWhatsApp } from '../config/whatsappService.js';
 
 const router = express.Router();
 
@@ -3263,11 +3264,25 @@ router.get('/reminders', async (req, res) => {
       const prnt = std.parentId ? parentMap[String(std.parentId._id || std.parentId)] : null;
       const parentName = prnt?.name || std.fatherName || 'Parent';
       const parentEmail = prnt?.email || '';
-      const parentPhone = prnt?.phone || '';
+      const parentPhone = prnt?.phone || std.phone || '';
 
       const d = new Date(f.dueDate);
       const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
       const dueAmt = f.remainingAmount !== undefined ? f.remainingAmount : (f.amount - (f.paidAmount || 0));
+
+      const reminderType = diffDays > 0 ? 'upcoming' : (diffDays === 0 ? 'due_today' : 'overdue');
+      const waMessage = buildWhatsAppFeeMessage({
+        studentName: std.name,
+        studentId: std.studentId,
+        studentClass: std.class,
+        parentName,
+        amount: dueAmt,
+        dueDate: f.dueDate,
+        reminderType,
+        daysDiff: diffDays,
+        schoolName: 'Landmark School'
+      });
+      const directWaLink = generateDirectWhatsAppLink(parentPhone, waMessage);
 
       const itemPayload = {
         student: { _id: std._id, name: std.name, class: std.class, studentId: std.studentId },
@@ -3279,6 +3294,9 @@ router.get('/reminders', async (req, res) => {
         parentPhone,
         daysRemaining: diffDays,
         daysOverdue: diffDays < 0 ? Math.abs(diffDays) : 0,
+        reminderType,
+        whatsAppMessage: waMessage,
+        directWaLink,
         reminderNotice: diffDays > 0 
           ? `Next month fee will pay after ${diffDays} day${diffDays === 1 ? '' : 's'}`
           : diffDays === 0 ? 'Fee is due today' : `Fee is overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}`
@@ -3308,11 +3326,11 @@ router.get('/reminders', async (req, res) => {
   }
 });
 
-// @desc    Dispatch Automated Fee Reminders (Cron Process or Manual Trigger)
+// @desc    Dispatch Automated Fee Reminders (Cron Process or Manual Batch Trigger)
 // @route   POST /api/admin/reminders/dispatch
 router.post('/reminders/dispatch', async (req, res) => {
   const { channel, reminderType, targetClass } = req.body;
-  const chosenChannel = channel || 'email';
+  const chosenChannel = channel || 'whatsapp';
   const chosenType = reminderType || 'all';
 
   try {
@@ -3348,27 +3366,54 @@ router.post('/reminders/dispatch', async (req, res) => {
       const prnt = std.parentId ? parentMap[String(std.parentId._id || std.parentId)] : null;
       const parentName = prnt?.name || std.fatherName || 'Parent';
       const parentEmail = prnt?.email || `${std.name.toLowerCase().replace(/\s+/g, '')}@parent.apnaschool.edu`;
-      const parentPhone = prnt?.phone || '+91 98XXX-XXXXX';
+      const parentPhone = prnt?.phone || std.phone || '';
 
       const d = new Date(f.dueDate);
       const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
 
       let determinedType = 'due_today';
-      let message = '';
       const dueAmt = f.remainingAmount !== undefined ? f.remainingAmount : f.amount;
 
       if (diffDays > 0) {
         determinedType = 'upcoming';
-        message = `Dear ${parentName}, this is a gentle reminder that the monthly fee for ${std.name} (${std.class}) is due on ${d.toLocaleDateString('en-IN')}. Amount due: ₹${dueAmt.toLocaleString('en-IN')}.`;
       } else if (diffDays === 0) {
         determinedType = 'due_today';
-        message = `Dear ${parentName}, the school fee of ₹${dueAmt.toLocaleString('en-IN')} for ${std.name} is due today. Kindly complete payment at the school cash desk or online.`;
       } else {
         determinedType = 'overdue';
-        message = `Dear ${parentName}, the fee payment of ₹${dueAmt.toLocaleString('en-IN')} for ${std.name} is overdue. Please settle at the cash desk immediately to avoid late fees.`;
       }
 
       if (chosenType !== 'all' && chosenType !== determinedType) continue;
+
+      let message = '';
+      let deliveryResult = { success: true, provider: chosenChannel, response: 'Delivered', directLink: '' };
+
+      if (chosenChannel === 'whatsapp') {
+        message = buildWhatsAppFeeMessage({
+          studentName: std.name,
+          studentId: std.studentId,
+          studentClass: std.class,
+          parentName,
+          amount: dueAmt,
+          dueDate: f.dueDate,
+          reminderType: determinedType,
+          daysDiff: diffDays,
+          schoolName: 'Landmark School'
+        });
+
+        // Trigger WhatsApp API call for student parent phone
+        deliveryResult = await sendWhatsAppMessage({
+          toPhone: parentPhone,
+          message
+        });
+      } else {
+        if (determinedType === 'upcoming') {
+          message = `Dear ${parentName}, this is a gentle reminder that the monthly fee for ${std.name} (${std.class}) is due on ${d.toLocaleDateString('en-IN')}. Amount due: ₹${dueAmt.toLocaleString('en-IN')}.`;
+        } else if (determinedType === 'due_today') {
+          message = `Dear ${parentName}, the school fee of ₹${dueAmt.toLocaleString('en-IN')} for ${std.name} is due today. Kindly complete payment at the school cash desk or online.`;
+        } else {
+          message = `Dear ${parentName}, the fee payment of ₹${dueAmt.toLocaleString('en-IN')} for ${std.name} is overdue. Please settle at the cash desk immediately to avoid late fees.`;
+        }
+      }
 
       const record = {
         studentId: std._id,
@@ -3384,18 +3429,18 @@ router.post('/reminders/dispatch', async (req, res) => {
         message,
         scheduledFor: now,
         sentAt: now,
-        status: 'DELIVERED',
-        providerResponse: `Delivered via ${chosenChannel.toUpperCase()} gateway (Code 200)`,
-        failureReason: null,
-        sentBy: req.body.sentBy || 'Scheduled Cron Engine'
+        status: deliveryResult.success ? 'DELIVERED' : 'FAILED',
+        providerResponse: deliveryResult.response || `Delivered via ${chosenChannel.toUpperCase()} gateway`,
+        failureReason: deliveryResult.error || null,
+        sentBy: req.body.sentBy || 'Automated WhatsApp Engine'
       };
 
       if (mockStore.isMock) {
         const saved = await mockStore.create('feeReminders', record);
-        dispatchedReminders.push(saved);
+        dispatchedReminders.push({ ...saved, directWaLink: deliveryResult.directLink });
       } else {
         const saved = await FeeReminder.create(record);
-        dispatchedReminders.push(saved);
+        dispatchedReminders.push({ ...saved.toJSON(), directWaLink: deliveryResult.directLink });
       }
     }
 
@@ -3410,9 +3455,101 @@ router.post('/reminders/dispatch', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully processed and dispatched ${dispatchedReminders.length} reminders!`,
+      message: `Successfully processed and dispatched ${dispatchedReminders.length} reminders via ${chosenChannel.toUpperCase()}!`,
       count: dispatchedReminders.length,
+      channel: chosenChannel,
       data: dispatchedReminders
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Send Single WhatsApp Fee Reminder directly to a student's parent phone
+// @route   POST /api/admin/reminders/send-single-whatsapp
+router.post('/reminders/send-single-whatsapp', async (req, res) => {
+  const { studentId, feeId, phone, customMessage } = req.body;
+  try {
+    let student = null;
+    let fee = null;
+    let parent = null;
+
+    if (mockStore.isMock) {
+      student = await mockStore.findById('students', studentId);
+      fee = feeId ? await mockStore.findById('fees', feeId) : null;
+      if (student?.parentId) parent = await mockStore.findById('parents', student.parentId);
+    } else {
+      student = await Student.findById(studentId);
+      if (feeId) fee = await Fee.findById(feeId);
+      if (student?.parentId) parent = await Parent.findById(student.parentId);
+    }
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const parentPhone = phone || parent?.phone || student.phone || '';
+    const parentName = parent?.name || student.fatherName || 'Parent';
+    const amountDue = fee ? (fee.remainingAmount !== undefined ? fee.remainingAmount : (fee.amount - (fee.paidAmount || 0))) : 0;
+
+    let daysDiff = 0;
+    let reminderType = 'due_today';
+    if (fee?.dueDate) {
+      const d = new Date(fee.dueDate);
+      daysDiff = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24));
+      reminderType = daysDiff > 0 ? 'upcoming' : (daysDiff === 0 ? 'due_today' : 'overdue');
+    }
+
+    const message = customMessage || buildWhatsAppFeeMessage({
+      studentName: student.name,
+      studentId: student.studentId,
+      studentClass: student.class,
+      parentName,
+      amount: amountDue,
+      dueDate: fee?.dueDate,
+      reminderType,
+      daysDiff,
+      schoolName: 'Landmark School'
+    });
+
+    const deliveryResult = await sendWhatsAppMessage({
+      toPhone: parentPhone,
+      message
+    });
+
+    const now = new Date();
+    const record = {
+      studentId: student._id,
+      studentName: student.name,
+      parentName,
+      parentEmail: parent?.email || '',
+      parentPhone,
+      feeId: fee?._id || null,
+      month: fee?.month || 'Current Month',
+      amountDue,
+      reminderType,
+      channel: 'whatsapp',
+      message,
+      scheduledFor: now,
+      sentAt: now,
+      status: deliveryResult.success ? 'DELIVERED' : 'FAILED',
+      providerResponse: deliveryResult.response || 'WhatsApp Notification Sent',
+      failureReason: deliveryResult.error || null,
+      sentBy: req.body.sentBy || 'Admin Desk'
+    };
+
+    let savedRecord = null;
+    if (mockStore.isMock) {
+      savedRecord = await mockStore.create('feeReminders', record);
+    } else {
+      savedRecord = await FeeReminder.create(record);
+    }
+
+    res.json({
+      success: true,
+      message: `WhatsApp reminder processed for ${student.name} (+${parentPhone})`,
+      directWaLink: deliveryResult.directLink,
+      data: savedRecord
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

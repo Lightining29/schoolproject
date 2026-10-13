@@ -223,9 +223,10 @@ export default function AdminDashboard() {
   // Fee Reminders Management State
   const [remindersData, setRemindersData] = useState({ upcoming: [], dueToday: [], overdue: [], logs: [] });
   const [loadingReminders, setLoadingReminders] = useState(false);
-  const [dispatchChannel, setDispatchChannel] = useState('email');
+  const [dispatchChannel, setDispatchChannel] = useState('whatsapp');
   const [dispatchType, setDispatchType] = useState('all');
   const [isDispatchingReminders, setIsDispatchingReminders] = useState(false);
+  const [sendingSingleWhatsAppId, setSendingSingleWhatsAppId] = useState(null);
 
   // Financial Reports Hub & Audit Trail State
   const [financialReportType, setFinancialReportType] = useState('daily_collection');
@@ -950,6 +951,46 @@ export default function AdminDashboard() {
       setIsDispatchingReminders(false);
       console.error(err);
       alert('Error dispatching reminders: ' + err.message);
+    }
+  };
+
+  const handleSendSingleWhatsApp = async (item) => {
+    if (!item?.student?._id) return;
+    const targetKey = `${item.student._id}_${item.fee?._id || 'fee'}`;
+    setSendingSingleWhatsAppId(targetKey);
+
+    try {
+      const res = await fetch('/api/admin/reminders/send-single-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          studentId: item.student._id,
+          feeId: item.fee?._id,
+          phone: item.parentPhone,
+          sentBy: 'Admin Direct WhatsApp'
+        })
+      });
+      const data = await res.json();
+      setSendingSingleWhatsAppId(null);
+      if (data.success) {
+        showToast(`WhatsApp reminder sent for ${item.student.name}!`);
+        // If direct WhatsApp link returned, offer to open in WhatsApp Web / App
+        if (data.directWaLink && window.confirm(`${data.message}\n\nWould you like to open WhatsApp Web/App directly now?`)) {
+          window.open(data.directWaLink, '_blank', 'noopener,noreferrer');
+        } else {
+          alert(data.message);
+        }
+        fetchReminders();
+      } else {
+        alert(data.message || 'Failed to send WhatsApp reminder');
+      }
+    } catch (err) {
+      setSendingSingleWhatsAppId(null);
+      console.error(err);
+      alert('Error sending WhatsApp message: ' + err.message);
     }
   };
 
@@ -4592,11 +4633,21 @@ export default function AdminDashboard() {
                                     <td className="p-2.5 text-right font-mono font-black text-slate-800">
                                       ₹{Number(item.dueAmount).toLocaleString('en-IN')}
                                     </td>
-                                    <td className="p-2.5 text-right">
+                                    <td className="p-2.5 text-right space-x-1.5 whitespace-nowrap">
+                                      <button
+                                        type="button"
+                                        title={item.parentPhone ? `Send WhatsApp reminder to ${item.parentPhone}` : 'No phone number available'}
+                                        onClick={() => handleSendSingleWhatsApp(item)}
+                                        disabled={sendingSingleWhatsAppId === `${item.student?._id}_${item.fee?._id || 'fee'}`}
+                                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-sm disabled:opacity-50"
+                                      >
+                                        <MessageCircle className="w-3 h-3" />
+                                        <span>{sendingSingleWhatsAppId === `${item.student?._id}_${item.fee?._id || 'fee'}` ? 'Sending...' : 'WhatsApp'}</span>
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => openUniversalPayModal(item.student, item.fee)}
-                                        className="px-2.5 py-1 bg-black text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-800"
+                                        className="px-2.5 py-1 bg-black text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-800 transition-all"
                                       >
                                         Collect
                                       </button>
@@ -4652,11 +4703,21 @@ export default function AdminDashboard() {
                                     <td className="p-2.5 text-right font-mono font-black text-rose-600">
                                       ₹{Number(item.dueAmount).toLocaleString('en-IN')}
                                     </td>
-                                    <td className="p-2.5 text-right">
+                                    <td className="p-2.5 text-right space-x-1.5 whitespace-nowrap">
+                                      <button
+                                        type="button"
+                                        title={item.parentPhone ? `Send WhatsApp overdue notice to ${item.parentPhone}` : 'No phone number available'}
+                                        onClick={() => handleSendSingleWhatsApp(item)}
+                                        disabled={sendingSingleWhatsAppId === `${item.student?._id}_${item.fee?._id || 'fee'}`}
+                                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-all shadow-sm disabled:opacity-50"
+                                      >
+                                        <MessageCircle className="w-3 h-3" />
+                                        <span>{sendingSingleWhatsAppId === `${item.student?._id}_${item.fee?._id || 'fee'}` ? 'Sending...' : 'WhatsApp'}</span>
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => openUniversalPayModal(item.student, item.fee)}
-                                        className="px-2.5 py-1 bg-black text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-800"
+                                        className="px-2.5 py-1 bg-black text-white rounded-lg text-[10px] font-bold cursor-pointer hover:bg-slate-800 transition-all"
                                       >
                                         Collect
                                       </button>
