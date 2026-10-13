@@ -451,8 +451,8 @@ router.get('/parent/receipt/:feeId', protect, authorize('parent'), async (req, r
         installments: fee.installments || []
       },
       school: {
-        name: 'Apna School Kindergarten & Primary Wing',
-        tagline: 'Nurturing Little Minds with Love & Care',
+        name: 'The Landmark Public School',
+        tagline: 'Excellence in Education, Knowledge & Character Building',
         address: 'Plot 42, Knowledge Park, City Center',
         phone: '+91 98765-43210',
         email: 'info@apnaschool.edu',

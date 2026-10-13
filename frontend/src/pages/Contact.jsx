@@ -108,7 +108,7 @@ export default function Contact() {
                 Connect directly with our admissions counselor on WhatsApp for immediate feedback on fee models.
               </p>
               <a
-                href="https://wa.me/919800000000?text=Hello%20Apna%20School%20Admissions%20Team%2C%20I%20have%20an%20inquiry."
+                href="https://wa.me/919800000000?text=Hello%20The%20Landmark%20Public%20School%20Admissions%20Team%2C%20I%20have%20an%20inquiry."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center w-full py-3 space-x-2 text-xs font-bold text-white transition-all shadow-md font-quicksand bg-emerald-500 hover:bg-emerald-600 rounded-xl"
@@ -251,7 +251,7 @@ export default function Contact() {
               <MapPin className="w-6 h-6" />
             </div>
             <div className="bg-white px-3 py-1.5 rounded-lg border border-orange-100 shadow text-[10px] font-bold text-slate-800 mt-2 font-quicksand whitespace-nowrap">
-              Apna School
+              The Landmark Public School
             </div>
           </div>
         </div>

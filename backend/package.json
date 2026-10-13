@@ -1,7 +1,7 @@
 {
   "name": "apna-school-backend",
   "version": "1.0.0",
-  "description": "Backend server for Apna School Kindergarten website",
+  "description": "Backend server for The Landmark Public School website",
   "main": "server.js",
   "type": "module",
   "scripts": {

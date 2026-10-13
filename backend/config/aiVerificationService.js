@@ -339,14 +339,14 @@ export function generateSchoolNoticeAI({
   const circularRef = `APN/CIR/${currentYear}/${Math.floor(100 + Math.random() * 900)}`;
 
   let salutation = 'Respected Parents & Guardians,';
-  let opening = `Warm greetings from the Administration at Apna School! We are pleased to communicate important updates regarding our upcoming school schedule.`;
+  let opening = `Warm greetings from the Administration at The Landmark Public School! We are pleased to communicate important updates regarding our upcoming school schedule.`;
   let closing = 'We look forward to your gracious presence and enthusiastic support as always.';
 
   if (tone === 'urgent') {
     opening = `This is an urgent administrative announcement regarding student schedule modifications and weather safety protocols.`;
     closing = 'Please acknowledge this advisory promptly to ensure your child’s safety and convenience.';
   } else if (tone === 'festive') {
-    opening = `With great delight and joyful anticipation, the Apna School family invites you to celebrate our grand annual festivity!`;
+    opening = `With great delight and joyful anticipation, The Landmark Public School family invites you to celebrate our grand annual festivity!`;
     closing = 'Let us join hands to make this an unforgettable memory of joy, laughter, and camaraderie for our young stars.';
   }
 
@@ -364,7 +364,7 @@ export function generateSchoolNoticeAI({
       'For any specific inquiries, please contact the front desk or school portal messaging.'
     ],
     closingText: closing,
-    signatory: 'Principal & Board of Management\nApna School Kindergarten & Primary Academy'
+    signatory: 'Principal & Board of Management\nThe Landmark Public School'
   };
 
   return generatedNotice;

@@ -51,8 +51,8 @@ export default function Navbar() {
             <Smile className="w-5 h-5" />
           </motion.div>
           <div>
-            <span className="font-quicksand font-extrabold text-lg text-[#5B468C] tracking-tight group-hover:text-[#7C3AED] transition-colors">Apna School</span>
-            <p className="text-[8.5px] text-[#FF7043] font-extrabold tracking-wider mt-[-5px]">KINDERGARTEN</p>
+            <span className="font-quicksand font-extrabold text-lg text-[#5B468C] tracking-tight group-hover:text-[#7C3AED] transition-colors">The Landmark Public School</span>
+            <p className="text-[8.5px] text-[#FF7043] font-extrabold tracking-wider mt-[-5px]">PUBLIC SCHOOL</p>
           </div>
         </Link>
 

@@ -307,7 +307,7 @@ export default function Home() {
                     >
                       <img
                         src={currentSlideData.mainImage}
-                        alt="Apna School Kindergarten Moments"
+                        alt="The Landmark Public School Moments"
                         className="w-full h-full object-cover"
                       />
                       
@@ -464,7 +464,7 @@ export default function Home() {
               <div className="p-4 bg-gradient-to-r from-[#FF7043] to-[#FFA000] text-white flex items-center justify-between">
                 <div className="flex items-center space-x-2 font-quicksand font-bold">
                   <Play className="w-4 h-4 fill-current" />
-                  <span>Welcome to Apna School Kindergarten Life</span>
+                  <span>Welcome to The Landmark Public School Life</span>
                 </div>
                 <button
                   onClick={() => setShowVideoModal(false)}
@@ -533,12 +533,12 @@ export default function Home() {
           
           {/* Left Text */}
           <div className="lg:col-span-6 space-y-5">
-            <span className="font-quicksand font-bold text-xs text-brandCoral tracking-widest uppercase">Welcome to Apna School</span>
+            <span className="font-quicksand font-bold text-xs text-brandCoral tracking-widest uppercase">Welcome to The Landmark Public School</span>
             <h2 className="text-3xl md:text-4xl text-slate-800 font-extrabold leading-tight">
               Where Every Child Feels <br />Seen, Heard, and Valued ❤️
             </h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              At Apna School, we believe every child is unique. Our program syllabus is custom-tailored to inspire a lifelong love of learning while building confidence, social collaboration skills, and natural emotional intelligence.
+              At The Landmark Public School, we believe every child is unique. Our program syllabus is custom-tailored to inspire a lifelong love of learning while building confidence, social collaboration skills, and natural emotional intelligence.
             </p>
             <div className="space-y-2 pt-2">
               <div className="flex items-center space-x-2 text-sm text-slate-700">
@@ -681,7 +681,7 @@ export default function Home() {
             <div className="space-y-4">
               <span className="text-4xl text-brandYellow-dark font-serif">“</span>
               <p className="text-sm md:text-base italic text-slate-600 leading-relaxed font-medium">
-                Apna School has been the best decision for our family. The teachers truly care and our child looks forward to school every single day! The Parent Portal updates (with photos and nap records) keep us totally connected.
+                The Landmark Public School has been the best decision for our family. The teachers truly care and our child looks forward to school every single day! The Parent Portal updates (with photos and nap records) keep us totally connected.
               </p>
             </div>
             

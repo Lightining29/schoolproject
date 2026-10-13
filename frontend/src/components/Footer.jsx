@@ -19,8 +19,8 @@ export default function Footer() {
               <Smile className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-lg font-bold text-white font-quicksand">Apna School</span>
-              <p className="text-[9px] text-brandCoral font-semibold tracking-wider mt-[-2px]">KINDERGARTEN</p>
+              <span className="text-lg font-bold text-white font-quicksand">The Landmark Public School</span>
+              <p className="text-[9px] text-brandCoral font-semibold tracking-wider mt-[-2px]">PUBLIC SCHOOL</p>
             </div>
           </div>
           <p className="text-sm text-slate-400">
@@ -86,7 +86,7 @@ export default function Footer() {
 
       {/* Copyright */}
       <div className="flex flex-col items-center justify-between px-4 mx-auto space-y-2 text-xs max-w-7xl md:px-8 md:flex-row text-slate-500 md:space-y-0">
-        <p>© {currentYear} Apna School. All rights reserved.</p>
+        <p>© {currentYear} The Landmark Public School. All rights reserved.</p>
         <p className="flex items-center space-x-1">
           <span>Made with</span>
           <Heart className="w-3.5 h-3.5 text-brandCoral fill-current" />

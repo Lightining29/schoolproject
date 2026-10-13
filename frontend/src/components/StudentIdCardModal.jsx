@@ -1,4 +1,4 @@
-﻿import React, { useRef } from 'react';
+import React, { useRef } from 'react';
 import { Printer, X, Phone, Award } from 'lucide-react';
 
 export default function StudentIdCardModal({ student, onClose }) {
@@ -221,13 +221,13 @@ export default function StudentIdCardModal({ student, onClose }) {
 
                   {/* Main School Heading */}
                   <h2
-                    className="text-[20px] font-black tracking-tight uppercase leading-tight"
+                    className="text-[17px] font-black tracking-tight uppercase leading-tight"
                     style={{
                       fontFamily: "'Montserrat', sans-serif",
                       color: '#881337'
                     }}
                   >
-                    APNA SCHOOL
+                    THE LANDMARK PUBLIC SCHOOL
                   </h2>
 
                   {/* Subtitle Location */}

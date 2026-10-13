@@ -1,6 +1,6 @@
-# Apna School Kindergarten Website (MERN)
+# The Landmark Public School Website (MERN)
 
-This is a complete MERN stack application for **Apna School** built with a child-friendly, modern responsive visual layout, incorporating parent portals, teacher classroom loggers, and school administration dashboards.
+This is a complete MERN stack application for **The Landmark Public School** built with a modern responsive visual layout, incorporating parent portals, teacher classroom loggers, and school administration dashboards.
 
 ---
 

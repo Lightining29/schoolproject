@@ -2,7 +2,7 @@
   "name": "apna-school-root",
   "version": "1.0.0",
   "private": true,
-  "description": "Root package manager for Apna School Kindergarten website",
+  "description": "Root package manager for The Landmark Public School website",
   "scripts": {
     "install-all": "npm install --prefix backend && npm install --prefix frontend --include=dev",
     "build-frontend": "npm run build --prefix frontend",

@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Apna School Kindergarten Management System
+-- The Landmark Public School Management System
 -- Hostinger MySQL Database Schema & Initial Data
 -- Compatible with MySQL 5.7+, MySQL 8.0+, MariaDB 10.3+
 -- ==============================================================================

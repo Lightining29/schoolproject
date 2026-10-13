@@ -9,7 +9,7 @@ export default function Brochure() {
   const downloadFile = (fileName) => {
     // Generate a simple simulated PDF text file download to verify download works!
     const element = document.createElement("a");
-    const file = new Blob([`Apna School - ${fileName} document simulator.\nThis is a mock PDF for local development and testing.\nVisit apnaschool.edu for live school brochures.`], {type: 'text/plain'});
+    const file = new Blob([`The Landmark Public School - ${fileName} document simulator.\nThis is a mock PDF for local development and testing.\nVisit the school portal for live brochures.`], {type: 'text/plain'});
     element.href = URL.createObjectURL(file);
     element.download = `${fileName.replace(/\s+/g, '_').toLowerCase()}.txt`;
     document.body.appendChild(element);

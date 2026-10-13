@@ -26,7 +26,7 @@ export default function About() {
             Nurturing Young Minds & Inspiring Creative Learners
           </h1>
           <p className="text-sm md:text-base text-slate-600 leading-relaxed font-medium">
-            Apna School is a premier early childhood learning academy. Founded with a vision to revolutionize primary education, we combine standard Montessori methodologies with play-based developmental goals to prepare toddlers for primary school and beyond.
+            The Landmark Public School is a premier learning academy. Founded with a vision to revolutionize education, we combine comprehensive methodologies with developmental goals to prepare students for school and beyond.
           </p>
           <p className="text-sm text-slate-500 leading-relaxed">
             Our campus features bright activity centers, sensory sandboxes, smart visual boards, and an organic vegetable patch where kids connect directly with nature. We maintain a strict student-to-teacher ratio of 8:1 to ensure that every single child gets the attention and warmth they need to flourish.
@@ -84,11 +84,11 @@ export default function About() {
           <span className="text-brandSky font-bold text-xs uppercase tracking-widest">MESSAGE FROM THE PRINCIPAL</span>
           <h3 className="font-quicksand font-bold text-2xl text-slate-800">Welcome to Our Learning Family!</h3>
           <p className="text-sm text-slate-600 leading-relaxed italic">
-            "Every child is a distinct flower, and together, they make this world a beautiful garden. At Apna School, our duty is to cultivate this garden with care, affection, and patience. We don't just teach children lessons; we help them build experiences, navigate their feelings, and celebrate small achievements every single day. I invite you to join our family and witness your child bloom."
+            "Every child is a distinct flower, and together, they make this world a beautiful garden. At The Landmark Public School, our duty is to cultivate this garden with care, affection, and patience. We don't just teach children lessons; we help them build experiences, navigate their feelings, and celebrate small achievements every single day. I invite you to join our family and witness your child bloom."
           </p>
           <div>
             <h4 className="font-quicksand font-bold text-slate-800 text-sm">Dr. Shruti Sen</h4>
-            <p className="text-[10px] text-slate-500 font-semibold uppercase">Principal, Apna School</p>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase">Principal, The Landmark Public School</p>
           </div>
         </div>
       </section>

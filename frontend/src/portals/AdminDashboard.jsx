@@ -1738,7 +1738,7 @@ export default function AdminDashboard() {
           </style>
         </head>
         <body>
-          <h1>Apna School</h1>
+          <h1>The Landmark Public School</h1>
           <p class="subtitle">Active Student Database Report — Generated on ${new Date().toLocaleDateString()}</p>
           <table>
             <thead>
@@ -1804,8 +1804,8 @@ export default function AdminDashboard() {
               //
             </button>
             <div>
-              <h2 className="font-quicksand font-extrabold text-black text-base leading-tight tracking-tight">
-                Apna School
+              <h2 className="font-quicksand font-extrabold text-black text-sm leading-tight tracking-tight">
+                The Landmark Public School
               </h2>
               <p className="text-[11px] font-bold text-slate-400 leading-tight">
                 Admin Portal
@@ -5096,7 +5096,7 @@ export default function AdminDashboard() {
                       <div className="border-b-2 border-slate-900 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                         <div>
                           <span className="font-black tracking-widest text-[11px] text-[#5B4DF5] uppercase block font-quicksand">
-                            APNA SCHOOL ACADEMY
+                            THE LANDMARK PUBLIC SCHOOL
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
                             Ref: {aiNoticeResult.circularRef}
@@ -5628,7 +5628,7 @@ export default function AdminDashboard() {
 
               <div className="pb-3 space-y-1 text-center border-b-2 border-slate-100">
                 <span className="text-[9px] font-extrabold tracking-widest text-[#7C3AED] bg-[#EAE8FC] px-2.5 py-0.5 rounded-full">APPLICATION REVIEW</span>
-                <h4 className="font-quicksand font-bold text-[#5B468C] text-lg mt-2">Apna School</h4>
+                <h4 className="font-quicksand font-bold text-[#5B468C] text-lg mt-2">The Landmark Public School</h4>
                 <p className="text-[10px] text-slate-400 font-semibold font-mono">App No: {selectedAdmission.applicationNumber}</p>
               </div>
 
@@ -6159,8 +6159,8 @@ export default function AdminDashboard() {
 
             {/* Receipt Header */}
             <div className="relative z-10 pb-6 text-center border-b border-solid border-slate-200 bg-[#F5F5FF] rounded-t-lg">
-              <img src="/logo.png" alt="Apna School Logo" className="mx-auto h-12 mb-2" />
-              <h2 className="text-3xl font-serif font-bold tracking-tight text-[#5B468C]">APNA SCHOOL</h2>
+              <img src="/logo.png" alt="The Landmark Public School Logo" className="mx-auto h-12 mb-2" />
+              <h2 className="text-2xl md:text-3xl font-serif font-bold tracking-tight text-[#5B468C]">THE LANDMARK PUBLIC SCHOOL</h2>
               <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Official Fee Slip</p>
               <p className="text-[8px] text-slate-400 mt-1">Sunshine Road, Model Town, City | +91 98XXX-XXXXX</p>
             </div>

@@ -24,7 +24,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['contact', 'phone', 'call', 'email', 'address', 'principal', 'location', 'office'],
-    answer: `**Contact Apna School Administration:**\n\n- **Phone**: +91 98765 43210 / (011) 2345-6789\n- **Email**: info@apnaschool.edu\n- **Address**: 742 Evergreen Campus, Educational Enclave, City Center.\n- **Visiting Hours**: 9:00 AM to 1:00 PM with prior appointment.`
+    answer: `**Contact The Landmark Public School Administration:**\n\n- **Phone**: +91 98765 43210 / (011) 2345-6789\n- **Email**: info@apnaschool.edu\n- **Address**: 742 Evergreen Campus, Educational Enclave, City Center.\n- **Visiting Hours**: 9:00 AM to 1:00 PM with prior appointment.`
   }
 ];
 
@@ -33,7 +33,7 @@ export default function Chatbot() {
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: "Hello! 👋 I am Apna School's AI Assistant. How can I help you today with admissions, fees, timings, or events?",
+      text: "Hello! 👋 I am The Landmark Public School's AI Assistant. How can I help you today with admissions, fees, timings, or events?",
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -140,7 +140,7 @@ export default function Chatbot() {
             type="button"
             onClick={() => setIsOpen(true)}
             className="flex items-center space-x-2.5 bg-black hover:bg-slate-900 text-white px-4 py-3 rounded-full shadow-2xl transition-all transform hover:scale-105 active:scale-95 border border-white/20 cursor-pointer group"
-            title="Chat with Apna School Assistant"
+            title="Chat with The Landmark Public School Assistant"
           >
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
               <Bot className="w-5 h-5 text-white animate-pulse" />
@@ -167,7 +167,7 @@ export default function Chatbot() {
               </div>
               <div>
                 <h3 className="font-quicksand font-bold text-sm text-white flex items-center gap-1.5 leading-tight">
-                  Apna School AI <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                  The Landmark Public School AI <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                 </h3>
                 <p className="text-[10px] font-semibold text-slate-400 leading-tight">Online • Instant 24/7 Answers</p>
               </div>
@@ -284,7 +284,7 @@ export default function Chatbot() {
           >
             <input
               type="text"
-              placeholder="Ask anything about Apna School..."
+              placeholder="Ask anything about The Landmark Public School..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 outline-none focus:border-black transition-colors"

@@ -95,11 +95,11 @@ export default function ResultCardModal({ activeResult, onClose }) {
             
             {/* School Name */}
             <div className="flex-grow text-center pr-12 md:pr-16">
-              <h2 className="text-[22px] md:text-[26px] font-black text-[#D4AF37] uppercase tracking-wide font-serif leading-none drop-shadow-sm">
-                Apna School
+              <h2 className="text-[20px] md:text-[24px] font-black text-[#D4AF37] uppercase tracking-wide font-serif leading-none drop-shadow-sm">
+                The Landmark Public School
               </h2>
               <h3 className="text-sm md:text-base font-bold text-white uppercase tracking-wider font-serif mt-1">
-                Kindergarten & Primary
+                Public School
               </h3>
             </div>
           </div>
@@ -330,9 +330,9 @@ export default function ResultCardModal({ activeResult, onClose }) {
               </span>
               {/* Circular School Stamp */}
               <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full border-2 border-dashed border-emerald-600/40 flex flex-col items-center justify-center bg-emerald-50/10 pointer-events-none select-none -rotate-[8deg] z-0">
-                <span className="text-[5px] font-black text-emerald-600/50 uppercase leading-none font-mono">APNA</span>
-                <span className="text-[6px] font-black text-emerald-600/60 uppercase leading-none my-0.5 font-mono">SCHOOL</span>
-                <span className="text-[5px] font-black text-emerald-600/50 uppercase leading-none font-mono">CAMPUS</span>
+                <span className="text-[4px] font-black text-emerald-600/50 uppercase leading-none font-mono">LANDMARK</span>
+                <span className="text-[5px] font-black text-emerald-600/60 uppercase leading-none my-0.5 font-mono">PUBLIC</span>
+                <span className="text-[4px] font-black text-emerald-600/50 uppercase leading-none font-mono">SCHOOL</span>
               </div>
               <p className="font-extrabold text-[9px] text-[#0A1D37] uppercase tracking-wider">Headmaster</p>
               <p className="text-[7px] text-slate-400 font-bold mt-0.5">Signed with Stamp</p>

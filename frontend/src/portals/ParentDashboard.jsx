@@ -421,7 +421,7 @@ export default function ParentDashboard() {
           >
             <Sparkles className="w-4.5 h-4.5 text-amber-300 shrink-0" />
             <div className="flex items-center justify-between w-full">
-              <span>Apna AI Parent Coach</span>
+              <span>Landmark AI Parent Coach</span>
               <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-400 text-slate-900 font-extrabold uppercase">
                 AI Pal
               </span>
@@ -749,7 +749,7 @@ export default function ParentDashboard() {
                 </div>
               )}
 
-              {/* Tab 6: Apna AI Parent Coach */}
+              {/* Tab 6: Landmark AI Parent Coach */}
               {activeTab === 'aiCoach' && (
                 <div className="space-y-6">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-orange-50 pb-4">
@@ -758,7 +758,7 @@ export default function ParentDashboard() {
                         <span className="p-1.5 bg-amber-100 text-amber-700 rounded-xl">
                           <Heart className="w-5 h-5 fill-amber-400 text-amber-600" />
                         </span>
-                        <h3 className="font-quicksand font-bold text-lg text-slate-800">Apna AI Parent Coach & Growth Pal</h3>
+                        <h3 className="font-quicksand font-bold text-lg text-slate-800">Landmark AI Parent Coach & Growth Pal</h3>
                         <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-amber-300">
                           AI Powered
                         </span>
@@ -1083,7 +1083,7 @@ export default function ParentDashboard() {
                 <CheckCircle className="w-6 h-6" />
               </div>
               <span className="text-[10px] font-extrabold tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-0.5 rounded-full">OFFICIAL FEE RECEIPT</span>
-              <h4 className="font-quicksand font-bold text-slate-800 text-base mt-2">{activeReceipt.school?.name || 'Apna School Kindergarten'}</h4>
+              <h4 className="font-quicksand font-bold text-slate-800 text-base mt-2">{activeReceipt.school?.name || 'The Landmark Public School'}</h4>
               <p className="text-[11px] text-slate-400 font-mono">Receipt No: {activeReceipt.receipt?.receiptNumber || 'REC-OFFICIAL'}</p>
             </div>
 

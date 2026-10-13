@@ -48,7 +48,7 @@ if (fs.existsSync(path.join(frontendDistPath, 'index.html'))) {
   // Root Route fallback
   app.get('/', (req, res) => {
     res.json({
-      message: 'Welcome to Apna School Kindergarten API Server!',
+      message: 'Welcome to The Landmark Public School API Server!',
       version: '1.0.0',
       mode: process.env.NODE_ENV || 'development'
     });
@@ -74,7 +74,7 @@ const PORT = process.env.PORT || 5000;
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, async () => {
-  console.log(`Apna School backend running in ${process.env.NODE_ENV || 'development'} mode on http://${HOST}:${PORT}`);
+  console.log(`The Landmark Public School backend running in ${process.env.NODE_ENV || 'development'} mode on http://${HOST}:${PORT}`);
   
   // Connect to Database & Seed asynchronously
   try {
