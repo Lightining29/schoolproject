@@ -451,11 +451,11 @@ router.get('/parent/receipt/:feeId', protect, authorize('parent'), async (req, r
         installments: fee.installments || []
       },
       school: {
-        name: 'The Landmark Public School',
+        name: 'the landmark school',
         tagline: 'Excellence in Education, Knowledge & Character Building',
-        address: 'Plot 42, Knowledge Park, City Center',
-        phone: '+91 98765-43210',
-        email: 'info@apnaschool.edu',
+        address: 'F-4, f block, F-4 hig, Duplex, Block F, Sector 23, Sanjay Nagar, Ghaziabad, Uttar Pradesh 201017',
+        phone: '+91 99902 90914',
+        email: 'thelandmarkschoolgzb@gmail.com',
         registrationNo: 'REG/KIND/2026/089'
       }
     });

@@ -73,7 +73,7 @@ export default function Contact() {
                 <div className="space-y-1">
                   <h4 className="font-bold font-quicksand text-slate-800">Address</h4>
                   <p className="font-semibold leading-relaxed text-slate-600">
-                    Sunshine Road, Model Town, City - 110001
+                    F-4, f block, F-4 hig, Duplex, Block F, Sector 23, Sanjay Nagar, Ghaziabad, Uttar Pradesh 201017
                   </p>
                 </div>
               </div>
@@ -83,7 +83,9 @@ export default function Contact() {
                 <div className="space-y-1">
                   <h4 className="font-bold font-quicksand text-slate-800">Phone Numbers</h4>
                   <p className="font-semibold leading-relaxed text-slate-600">
-                    +91 98XXX-XXXXX
+                    <a href="tel:9990290914" className="hover:text-brandCoral transition-colors">
+                      +91 99902 90914
+                    </a>
                   </p>
                 </div>
               </div>
@@ -93,7 +95,9 @@ export default function Contact() {
                 <div className="space-y-1">
                   <h4 className="font-bold font-quicksand text-slate-800">Email Address</h4>
                   <p className="font-semibold leading-relaxed text-slate-600">
-                    contact@apnaschool.edu
+                    <a href="mailto:thelandmarkschoolgzb@gmail.com" className="hover:text-brandCoral transition-colors break-all">
+                      thelandmarkschoolgzb@gmail.com
+                    </a>
                   </p>
                 </div>
               </div>
@@ -108,7 +112,7 @@ export default function Contact() {
                 Connect directly with our admissions counselor on WhatsApp for immediate feedback on fee models.
               </p>
               <a
-                href="https://wa.me/919800000000?text=Hello%20The%20Landmark%20Public%20School%20Admissions%20Team%2C%20I%20have%20an%20inquiry."
+                href="https://wa.me/919990290914?text=Hello%20the%20landmark%20school%20Admissions%20Team%2C%20I%20have%20an%20inquiry."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center w-full py-3 space-x-2 text-xs font-bold text-white transition-all shadow-md font-quicksand bg-emerald-500 hover:bg-emerald-600 rounded-xl"

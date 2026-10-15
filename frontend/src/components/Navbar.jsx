@@ -43,15 +43,15 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto flex items-center justify-between relative">
         
         {/* Logo */}
-        <Link to="/" className="flex items-center space-x-2 group">
+        <Link to="/" className="flex items-center space-x-2.5 group">
           <motion.div
-            whileHover={{ scale: 1.08, rotate: [0, -10, 10, 0] }}
-            className="w-9 h-9 rounded-full bg-[#FEF3C7] border-2 border-white flex items-center justify-center text-amber-500 shadow-[0_3px_8px_rgba(251,191,36,0.12),inset_1px_1px_2px_white]"
+            whileHover={{ scale: 1.08 }}
+            className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md flex items-center justify-center bg-white shrink-0"
           >
-            <Smile className="w-5 h-5" />
+            <img src="/logo.png" alt="The Landmark School Logo" className="w-full h-full object-cover" />
           </motion.div>
           <div>
-            <span className="font-quicksand font-extrabold text-lg text-[#5B468C] tracking-tight group-hover:text-[#7C3AED] transition-colors">Landmark School</span>
+            <span className="font-quicksand font-extrabold text-lg text-[#5B468C] tracking-tight group-hover:text-[#7C3AED] transition-colors capitalize">the landmark school</span>
           </div>
         </Link>
 

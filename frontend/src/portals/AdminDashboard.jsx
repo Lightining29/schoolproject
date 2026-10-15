@@ -6220,10 +6220,10 @@ export default function AdminDashboard() {
 
             {/* Receipt Header */}
             <div className="relative z-10 pb-6 text-center border-b border-solid border-slate-200 bg-[#F5F5FF] rounded-t-lg">
-              <img src="/logo.png" alt="The Landmark Public School Logo" className="mx-auto h-12 mb-2" />
-              <h2 className="text-2xl md:text-3xl font-serif font-bold tracking-tight text-[#5B468C]">THE LANDMARK PUBLIC SCHOOL</h2>
+              <img src="/logo.png" alt="the landmark school Logo" className="mx-auto h-12 mb-2 rounded-full object-cover" />
+              <h2 className="text-2xl md:text-3xl font-serif font-bold tracking-tight text-[#5B468C] uppercase">THE LANDMARK SCHOOL</h2>
               <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Official Fee Slip</p>
-              <p className="text-[8px] text-slate-400 mt-1">Sunshine Road, Model Town, City | +91 98XXX-XXXXX</p>
+              <p className="text-[8px] text-slate-400 mt-1">F-4, Sector 23, Sanjay Nagar, Ghaziabad, UP 201017 | +91 99902 90914</p>
             </div>
 
             {/* Receipt Details Grid */}

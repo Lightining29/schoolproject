@@ -24,7 +24,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['contact', 'phone', 'call', 'email', 'address', 'principal', 'location', 'office'],
-    answer: `**Contact The Landmark Public School Administration:**\n\n- **Phone**: +91 98765 43210 / (011) 2345-6789\n- **Email**: info@apnaschool.edu\n- **Address**: 742 Evergreen Campus, Educational Enclave, City Center.\n- **Visiting Hours**: 9:00 AM to 1:00 PM with prior appointment.`
+    answer: `**Contact the landmark school Administration:**\n\n- **Phone**: +91 99902 90914\n- **Email**: thelandmarkschoolgzb@gmail.com\n- **Address**: F-4, f block, F-4 hig, Duplex, Block F, Sector 23, Sanjay Nagar, Ghaziabad, Uttar Pradesh 201017\n- **Visiting Hours**: 8:30 AM to 2:00 PM with prior appointment.`
   }
 ];
 
@@ -33,7 +33,7 @@ export default function Chatbot() {
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: "Hello! 👋 I am The Landmark Public School's AI Assistant. How can I help you today with admissions, fees, timings, or events?",
+      text: "Hello! 👋 I am the landmark school's AI Assistant. How can I help you today with admissions, fees, timings, or events?",
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);

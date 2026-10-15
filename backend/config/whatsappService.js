@@ -50,7 +50,7 @@ export function buildWhatsAppFeeMessage({
   dueDate = '',
   reminderType = 'due_today',
   daysDiff = 0,
-  schoolName = 'Landmark School'
+  schoolName = 'the landmark school'
 }) {
   const formattedAmount = `₹${Number(amount || 0).toLocaleString('en-IN')}`;
   const formattedDueDate = dueDate ? new Date(dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A';

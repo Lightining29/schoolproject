@@ -34,13 +34,13 @@ export const generateFeeReceiptPDF = (receiptData) => {
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(20);
-  doc.text(school.name || 'THE LANDMARK PUBLIC SCHOOL', 105, 15, { align: 'center' });
+  doc.text(school.name || 'THE LANDMARK SCHOOL', 105, 15, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text(school.tagline || 'Excellence in Education, Knowledge & Character Building', 105, 22, { align: 'center' });
   doc.setFontSize(8);
-  doc.text(`${school.address || 'Knowledge Park, City Center'} | Phone: ${school.phone || '+91 98765-43210'} | Reg: ${school.registrationNo || 'REG/2026/089'}`, 105, 29, { align: 'center' });
+  doc.text(`${school.address || 'F-4, Sector 23, Sanjay Nagar, Ghaziabad, UP 201017'} | Phone: ${school.phone || '+91 99902 90914'} | Reg: ${school.registrationNo || 'REG/2026/089'}`, 105, 29, { align: 'center' });
 
   // 2. Receipt Title & Badge
   doc.setTextColor(...textColor);
@@ -237,14 +237,14 @@ export const generateFeeReceiptPDF = (receiptData) => {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text('The Landmark Public School Accounts Branch', 166, termsY + 24, { align: 'center' });
+  doc.text('the landmark school Accounts Branch', 166, termsY + 24, { align: 'center' });
 
   // 7. Footer Decorative Bar
   doc.setFillColor(...primaryColor);
   doc.rect(0, 290, 210, 7, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(7);
-  doc.text('Thank you for trusting The Landmark Public School with your child\'s learning journey.', 105, 294.5, { align: 'center' });
+  doc.text('Thank you for trusting the landmark school with your child\'s learning journey.', 105, 294.5, { align: 'center' });
 
   // Save / Trigger Download
   const filename = `Receipt_${receipt.receiptNumber || 'Official'}_${(student.name || 'Student').replace(/\s+/g, '_')}.pdf`;
